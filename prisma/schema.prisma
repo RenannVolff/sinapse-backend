@@ -1,0 +1,84 @@
+// schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- TABELA DE USUÁRIOS (PROFISSIONAIS/TERAPEUTAS) ---
+model Usuario {
+  id        String   @id @default(uuid())
+  nome      String
+  email     String   @unique
+  senhaHash String
+  criadoEm  DateTime @default(now())
+  alunos    Aluno[]
+
+  @@map("usuarios")
+}
+
+// --- TABELA DE ALUNOS ---
+model Aluno {
+  id             String      @id @default(uuid())
+  nomeCompleto   String
+  dataNascimento DateTime
+  responsavel    String?
+  contato        String?
+  criadoEm       DateTime    @default(now())
+  usuarioId      String
+  usuario        Usuario     @relation(fields: [usuarioId], references: [id])
+  atendimentos   Atendimento[]
+
+  @@map("alunos")
+}
+
+// --- TABELA DE ATENDIMENTOS ---
+model Atendimento {
+  id              String      @id @default(uuid())
+  alunoId         String
+  aluno           Aluno       @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  dataAtendimento DateTime
+  tituloSessao    String
+  observacoes     String?     // Texto longo para observações gerais
+  concluido       Boolean     @default(false)
+  atividades      Atividade[]
+
+  @@index([alunoId, dataAtendimento])
+  @@map("atendimentos")
+}
+
+// --- TABELA DE ATIVIDADES (GRÁFICO INTELIGENTE) ---
+model Atividade {
+  id               String          @id @default(uuid())
+  atendimentoId    String
+  atendimento      Atendimento     @relation(fields: [atendimentoId], references: [id], onDelete: Cascade)
+  titulo           String
+  
+  // Nível de Dificuldade (1 a 5) - Define o peso da atividade
+  nivelDificuldade Int             @default(1) 
+  
+  // Percentual (0-100%) - Para o gráfico de Precisão
+  percentualAcerto Float           @default(0) 
+  
+  // Score (Percentual * Dificuldade) - Para o gráfico de Evolução Intelectual
+  scorePonderado   Float           @default(0) 
+
+  itensChecklist   ItemChecklist[]
+
+  @@map("atividades")
+}
+
+// --- TABELA DE CHECKLIST ---
+model ItemChecklist {
+  id          String    @id @default(uuid())
+  atividadeId String
+  atividade   Atividade @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  descricao   String
+  realizado   Boolean   @default(false)
+  observacao  String?   // Observação específica do item para detalhes adicionais da atividade
+  
+  @@map("itens_checklist")
+}
