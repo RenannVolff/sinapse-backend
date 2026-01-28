@@ -1,34 +1,23 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { AtendimentosService } from './atendimentos.service';
 import { CreateAtendimentoDto } from './dto/create-atendimento.dto';
-import { UpdateAtendimentoDto } from './dto/update-atendimento.dto';
 
 @Controller('atendimentos')
 export class AtendimentosController {
-  constructor(private readonly atendimentosService: AtendimentosService) {}
+  constructor(private readonly service: AtendimentosService) {}
 
   @Post()
-  create(@Body() createAtendimentoDto: CreateAtendimentoDto) {
-    return this.atendimentosService.create(createAtendimentoDto);
+  create(@Body() dto: CreateAtendimentoDto) {
+    return this.service.create(dto);
   }
 
-  @Get()
-  findAll() {
-    return this.atendimentosService.findAll();
+  @Get('aluno/:id')
+  findByAluno(@Param('id') id: string) {
+    return this.service.findAllByAluno(id);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.atendimentosService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateAtendimentoDto: UpdateAtendimentoDto) {
-    return this.atendimentosService.update(+id, updateAtendimentoDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.atendimentosService.remove(+id);
+  @Get('calendario')
+  findByMonth(@Query('mes') mes: string, @Query('ano') ano: string) {
+    return this.service.findByMonth(Number(mes), Number(ano));
   }
 }

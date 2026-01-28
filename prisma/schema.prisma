@@ -55,15 +55,15 @@ model Atividade {
   id               String          @id @default(uuid())
   atendimentoId    String
   atendimento      Atendimento     @relation(fields: [atendimentoId], references: [id], onDelete: Cascade)
-  titulo           String
   
-  // Nível de Dificuldade (1 a 5) - Define o peso da atividade
+  titulo           String          // Ex: "Coordenação Motora - Pinça"
   nivelDificuldade Int             @default(1) 
   
-  // Percentual (0-100%) - Para o gráfico de Precisão
+  // Observação Geral (A caixa de texto no final das 5 tentativas)
+  observacao       String?         @db.Text 
+
+  // Dados calculados (Mantemos a lógica da ponderada)
   percentualAcerto Float           @default(0) 
-  
-  // Score (Percentual * Dificuldade) - Para o gráfico de Evolução Intelectual
   scorePonderado   Float           @default(0) 
 
   itensChecklist   ItemChecklist[]

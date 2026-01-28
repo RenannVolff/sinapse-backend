@@ -1,26 +1,45 @@
 import { Injectable } from '@nestjs/common';
 import { CreateAtendimentoDto } from './dto/create-atendimento.dto';
-import { UpdateAtendimentoDto } from './dto/update-atendimento.dto';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class AtendimentosService {
-  create(createAtendimentoDto: CreateAtendimentoDto) {
-    return 'This action adds a new atendimento';
+  constructor(private prisma: PrismaService) {}
+
+  async create(dto: CreateAtendimentoDto) {
+    return this.prisma.atendimento.create({
+      data: {
+        alunoId: dto.alunoId,
+        dataAtendimento: new Date(dto.dataAtendimento),
+        tituloSessao: dto.tituloSessao,
+        observacoes: dto.observacoes,
+      },
+    });
   }
 
-  findAll() {
-    return `This action returns all atendimentos`;
+  // Busca atendimentos de um aluno específico (para o Histórico)
+  findAllByAluno(alunoId: string) {
+    return this.prisma.atendimento.findMany({
+      where: { alunoId },
+      orderBy: { dataAtendimento: 'desc' }, // Mais recentes primeiro
+      include: { atividades: true }, // Vai trazer as atividades desta sessão
+    });
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} atendimento`;
-  }
+  // Busca atendimentos por mês (para o Calendário)
+  async findByMonth(mes: number, ano: number) {
+    // Lógica simples: pegar do dia 1 ao dia 31 daquele mês
+    const inicio = new Date(ano, mes - 1, 1);
+    const fim = new Date(ano, mes, 0);
 
-  update(id: number, updateAtendimentoDto: UpdateAtendimentoDto) {
-    return `This action updates a #${id} atendimento`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} atendimento`;
+    return this.prisma.atendimento.findMany({
+      where: {
+        dataAtendimento: {
+          gte: inicio,
+          lte: fim,
+        },
+      },
+      include: { aluno: { select: { nomeCompleto: true } } },
+    });
   }
 }
