@@ -1,28 +1,33 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  IsString,
-  IsNotEmpty,
-  IsUUID,
   IsInt,
-  Min,
-  Max,
+  IsNotEmpty,
   IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
 } from 'class-validator';
 
 export class CreateAtividadeDto {
+  @ApiProperty({ description: 'ID do Atendimento vinculado' })
   @IsUUID()
   @IsNotEmpty()
   atendimentoId: string;
 
+  @ApiProperty({ description: 'Título da atividade' })
   @IsString()
   @IsNotEmpty()
   titulo: string;
 
+  @ApiProperty({ description: 'Nível de dificuldade (1 a 5)' })
   @IsInt()
-  @Min(1, { message: 'A dificuldade mínima é 1' })
-  @Max(5, { message: 'A dificuldade máxima é 5' })
+  @Min(1)
+  @Max(5)
   nivelDificuldade: number;
 
+  @ApiPropertyOptional({ description: 'Observação geral final' })
   @IsString()
   @IsOptional()
-  observacao?: string; // Agora garantimos: É UMA STRING, não um array.
+  observacao?: string;
 }

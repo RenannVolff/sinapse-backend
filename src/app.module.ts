@@ -8,6 +8,7 @@ import { AtendimentosModule } from './modules/atendimentos/atendimentos.module';
 import { AtividadesModule } from './modules/atividades/atividades.module';
 import { RelatoriosModule } from './modules/relatorios/relatorios.module';
 import { IaModule } from './modules/ia/ia.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { IaModule } from './modules/ia/ia.module';
     AtividadesModule,
     RelatoriosModule,
     IaModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

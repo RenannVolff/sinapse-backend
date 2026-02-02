@@ -1,12 +1,28 @@
-// Define a estrutura exata que esperamos receber do Frontend
+import { ApiProperty } from '@nestjs/swagger';
+import { IsDateString, IsNotEmpty, IsString, IsUUID } from 'class-validator';
+
 export class CreateAlunoDto {
+  @ApiProperty({ description: 'Nome completo do aluno/paciente' })
+  @IsString()
+  @IsNotEmpty()
   nomeCompleto: string;
-  // O front enviará a data como texto (ex: "2015-05-20"), posteriomente converto para Date
+
+  @ApiProperty({ description: 'Data de nascimento (Formato ISO 8601)' })
+  @IsDateString({}, { message: 'Data inválida' })
   dataNascimento: string;
 
+  @ApiProperty({ description: 'Nome do responsável legal' })
+  @IsString()
+  @IsNotEmpty()
   responsavel: string;
+
+  @ApiProperty({ description: 'Contato do responsável' })
+  @IsString()
+  @IsNotEmpty()
   contato: string;
-  // Por enquanto, será enviado o ID do profissional manualmente.
-  // No futuro (com JWT), isso será pego automaticamente do token de login.
+
+  @ApiProperty({ description: 'ID do Profissional responsável' })
+  @IsUUID(undefined, { message: 'ID de usuário inválido' })
+  @IsNotEmpty()
   usuarioId: string;
 }
