@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateAtendimentoDto } from './dto/create-atendimento.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -17,18 +17,15 @@ export class AtendimentosService {
     });
   }
 
-  // Busca atendimentos de um aluno específico (para o Histórico)
   findAllByAluno(alunoId: string) {
     return this.prisma.atendimento.findMany({
       where: { alunoId },
-      orderBy: { dataAtendimento: 'desc' }, // Mais recentes primeiro
-      include: { atividades: true }, // Vai trazer as atividades desta sessão
+      orderBy: { dataAtendimento: 'desc' },
+      include: { atividades: true },
     });
   }
 
-  // Busca atendimentos por mês (para o Calendário)
   async findByMonth(mes: number, ano: number) {
-    // Lógica simples: pegar do dia 1 ao dia 31 daquele mês
     const inicio = new Date(ano, mes - 1, 1);
     const fim = new Date(ano, mes, 0);
 
@@ -39,7 +36,35 @@ export class AtendimentosService {
           lte: fim,
         },
       },
-      include: { aluno: { select: { nomeCompleto: true } } },
+      include: {
+        aluno: {
+          select: { nomeCompleto: true },
+        },
+      },
+    });
+  }
+
+  // --- NOVAS FUNÇÕES PARA CALENDÁRIO INTERATIVO ---
+
+  // Reagendar (Drag & Drop)
+  async updateData(id: string, novaDataString: string) {
+    // Verifica se existe antes de tentar atualizar
+    const existe = await this.prisma.atendimento.findUnique({ where: { id } });
+    if (!existe) throw new NotFoundException('Atendimento não encontrado');
+
+    return this.prisma.atendimento.update({
+      where: { id },
+      data: { dataAtendimento: new Date(novaDataString) },
+    });
+  }
+
+  // Excluir sessão
+  async remove(id: string) {
+    const existe = await this.prisma.atendimento.findUnique({ where: { id } });
+    if (!existe) throw new NotFoundException('Atendimento não encontrado');
+
+    return this.prisma.atendimento.delete({
+      where: { id },
     });
   }
 }

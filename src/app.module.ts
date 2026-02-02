@@ -7,9 +7,18 @@ import { AlunosModule } from './modules/alunos/alunos.module';
 import { AtendimentosModule } from './modules/atendimentos/atendimentos.module';
 import { AtividadesModule } from './modules/atividades/atividades.module';
 import { RelatoriosModule } from './modules/relatorios/relatorios.module';
+import { IaModule } from './modules/ia/ia.module';
 
 @Module({
-  imports: [PrismaModule, UsuariosModule, AlunosModule, AtendimentosModule, AtividadesModule, RelatoriosModule],
+  imports: [
+    PrismaModule,
+    UsuariosModule,
+    AlunosModule,
+    AtendimentosModule,
+    AtividadesModule,
+    RelatoriosModule,
+    IaModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

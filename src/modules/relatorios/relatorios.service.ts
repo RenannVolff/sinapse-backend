@@ -1,26 +1,63 @@
 import { Injectable } from '@nestjs/common';
-import { CreateRelatorioDto } from './dto/create-relatorio.dto';
-import { UpdateRelatorioDto } from './dto/update-relatorio.dto';
+import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client'; // Importante para tipagem estrita
 
 @Injectable()
 export class RelatoriosService {
-  create(createRelatorioDto: CreateRelatorioDto) {
-    return 'This action adds a new relatorio';
-  }
+  constructor(private prisma: PrismaService) {}
 
-  findAll() {
-    return `This action returns all relatorios`;
-  }
+  // Gera os dados para o Gráfico de Linha Dupla
+  async gerarGraficoEvolucao(alunoId: string, inicio?: Date, fim?: Date) {
+    // Construção do objeto WHERE com tipagem do Prisma
+    const whereCondition: Prisma.AtendimentoWhereInput = {
+      alunoId,
+      concluido: true,
+    };
 
-  findOne(id: number) {
-    return `This action returns a #${id} relatorio`;
-  }
+    // Adiciona filtros de data se existirem
+    if (inicio || fim) {
+      whereCondition.dataAtendimento = {};
+      if (inicio) {
+        whereCondition.dataAtendimento.gte = inicio; // Maior ou igual
+      }
+      if (fim) {
+        whereCondition.dataAtendimento.lte = fim; // Menor ou igual
+      }
+    }
 
-  update(id: number, updateRelatorioDto: UpdateRelatorioDto) {
-    return `This action updates a #${id} relatorio`;
-  }
+    // Busca no banco
+    const atendimentos = await this.prisma.atendimento.findMany({
+      where: whereCondition,
+      include: {
+        atividades: {
+          select: {
+            percentualAcerto: true,
+            scorePonderado: true,
+          },
+        },
+      },
+      orderBy: { dataAtendimento: 'asc' },
+    });
 
-  remove(id: number) {
-    return `This action removes a #${id} relatorio`;
+    // Processamento matemático
+    return atendimentos.map((at) => {
+      const qtdAtividades = at.atividades.length || 1;
+
+      const somaPrecisao = at.atividades.reduce(
+        (acc, curr) => acc + curr.percentualAcerto,
+        0,
+      );
+      const somaScore = at.atividades.reduce(
+        (acc, curr) => acc + curr.scorePonderado,
+        0,
+      );
+
+      return {
+        data: at.dataAtendimento.toISOString().split('T')[0],
+        precisao: Math.round(somaPrecisao / qtdAtividades),
+        evolucao: Math.round(somaScore / qtdAtividades),
+        sessao: at.tituloSessao,
+      };
+    });
   }
 }
