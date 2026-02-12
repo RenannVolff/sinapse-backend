@@ -5,7 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 @Injectable()
 export class AtendimentosService {
   constructor(private prisma: PrismaService) {}
-
+  // Função para criar um novo atendimento
   async create(dto: CreateAtendimentoDto) {
     return this.prisma.atendimento.create({
       data: {
@@ -16,7 +16,7 @@ export class AtendimentosService {
       },
     });
   }
-
+  // Função para listar atendimentos de um aluno específico, ordenados por data
   findAllByAluno(alunoId: string) {
     return this.prisma.atendimento.findMany({
       where: { alunoId },
@@ -24,11 +24,11 @@ export class AtendimentosService {
       include: { atividades: true },
     });
   }
-
+  // Função para listar atendimentos de um mês específico, ordenados por data
   async findByMonth(mes: number, ano: number) {
     const inicio = new Date(ano, mes - 1, 1);
     const fim = new Date(ano, mes, 0);
-
+    // Ajusta o horário para incluir todo o dia final
     return this.prisma.atendimento.findMany({
       where: {
         dataAtendimento: {

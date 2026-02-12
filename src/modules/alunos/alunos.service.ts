@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { CreateAlunoDto } from './dto/create-aluno.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 
+// O serviço de Alunos é responsável por toda a lógica de negócios relacionada aos alunos, como criação, listagem e busca.
+// Ele interage diretamente com o PrismaService para acessar o banco de dados.
 @Injectable()
 export class AlunosService {
   constructor(private prisma: PrismaService) {}
@@ -20,7 +22,7 @@ export class AlunosService {
     });
   }
 
-  // Listagem de todos os alunos e traz o nome do profissional/terapeuta junto
+  // Listagem de todos os alunos e traz o nome do profissional/terapeuta incluso
   findAll() {
     return this.prisma.aluno.findMany({
       include: {
