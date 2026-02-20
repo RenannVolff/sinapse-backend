@@ -9,6 +9,7 @@ import { AtividadesModule } from './modules/atividades/atividades.module';
 import { RelatoriosModule } from './modules/relatorios/relatorios.module';
 import { IaModule } from './modules/ia/ia.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { AuthModule } from './modules/auth/auth.module';
     RelatoriosModule,
     IaModule,
     AuthModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],
