@@ -1,39 +1,38 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateAtendimentoDto } from './dto/create-atendimento.dto';
 import { PrismaService } from '../../prisma/prisma.service';
+
+interface CreateAtendimentoDto {
+  alunoId: string;
+  dataAtendimento: string | Date;
+  tituloSessao: string;
+  observacoes?: string;
+}
 
 @Injectable()
 export class AtendimentosService {
-  constructor(private prisma: PrismaService) {}
-  // Função para criar um novo atendimento
-  async create(dto: CreateAtendimentoDto) {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(data: CreateAtendimentoDto) {
     return this.prisma.atendimento.create({
       data: {
-        alunoId: dto.alunoId,
-        dataAtendimento: new Date(dto.dataAtendimento),
-        tituloSessao: dto.tituloSessao,
-        observacoes: dto.observacoes,
+        alunoId: data.alunoId,
+        dataAtendimento: new Date(data.dataAtendimento),
+        tituloSessao: data.tituloSessao,
+        observacoes: data.observacoes,
       },
     });
   }
-  // Função para listar atendimentos de um aluno específico, ordenados por data
-  findAllByAluno(alunoId: string) {
-    return this.prisma.atendimento.findMany({
-      where: { alunoId },
-      orderBy: { dataAtendimento: 'desc' },
-      include: { atividades: true },
-    });
-  }
-  // Função para listar atendimentos de um mês específico, ordenados por data
-  async findByMonth(mes: number, ano: number) {
-    const inicio = new Date(ano, mes - 1, 1);
-    const fim = new Date(ano, mes, 0);
-    // Ajusta o horário para incluir todo o dia final
+
+  async findAllCalendario(mes: number, ano: number) {
+    // Busca do primeiro ao último dia do mês
+    const dataInicio = new Date(ano, mes - 1, 1);
+    const dataFim = new Date(ano, mes, 0, 23, 59, 59);
+
     return this.prisma.atendimento.findMany({
       where: {
         dataAtendimento: {
-          gte: inicio,
-          lte: fim,
+          gte: dataInicio,
+          lte: dataFim,
         },
       },
       include: {
@@ -41,30 +40,43 @@ export class AtendimentosService {
           select: { nomeCompleto: true },
         },
       },
+      orderBy: {
+        dataAtendimento: 'asc',
+      },
     });
   }
 
-  // --- NOVAS FUNÇÕES PARA CALENDÁRIO INTERATIVO ---
-
-  // Reagendar (Drag & Drop)
-  async updateData(id: string, novaDataString: string) {
-    // Verifica se existe antes de tentar atualizar
-    const existe = await this.prisma.atendimento.findUnique({ where: { id } });
-    if (!existe) throw new NotFoundException('Atendimento não encontrado');
-
-    return this.prisma.atendimento.update({
+  // === A FUNÇÃO QUE FALTAVA (COM O PRISMA CORRIGIDO) ===
+  async findOne(id: string) {
+    const atendimento = await this.prisma.atendimento.findUnique({
       where: { id },
-      data: { dataAtendimento: new Date(novaDataString) },
+      include: {
+        aluno: {
+          select: {
+            nomeCompleto: true,
+          },
+        },
+        atividades: {
+          // Solução segura: usa o ID para manter a ordem de criação sem causar erros de nome de coluna
+          orderBy: {
+            id: 'asc',
+          },
+          include: {
+            itensChecklist: {
+              // Garante que a 1ª, 2ª, 3ª tentativa fiquem na ordem correta
+              orderBy: {
+                id: 'asc',
+              },
+            },
+          },
+        },
+      },
     });
-  }
 
-  // Excluir sessão
-  async remove(id: string) {
-    const existe = await this.prisma.atendimento.findUnique({ where: { id } });
-    if (!existe) throw new NotFoundException('Atendimento não encontrado');
+    if (!atendimento) {
+      throw new NotFoundException('Sessão de atendimento não encontrada.');
+    }
 
-    return this.prisma.atendimento.delete({
-      where: { id },
-    });
+    return atendimento;
   }
 }

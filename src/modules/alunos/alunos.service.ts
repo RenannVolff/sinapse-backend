@@ -45,4 +45,50 @@ export class AlunosService {
       where: { id },
     });
   }
+
+  async gerarDadosEvolucao(alunoId: string) {
+    // Busca todas as sessões do aluno que têm atividades
+    const sessoes = await this.prisma.atendimento.findMany({
+      where: { alunoId },
+      orderBy: { dataAtendimento: 'asc' },
+      include: {
+        atividades: {
+          include: { itensChecklist: true },
+        },
+      },
+    });
+
+    // Calcula a pontuação matemática de cada sessão
+    const dadosGrafico = sessoes.map((sessao) => {
+      let scoreTotalSessao = 0;
+      let pesoTotalSessao = 0;
+
+      sessao.atividades.forEach((ativ) => {
+        const acertos = ativ.itensChecklist.filter((i) => i.realizado).length;
+        // Fórmula: (Acertos / 5) * 100 * Dificuldade
+        const scoreAtividade = (acertos / 5) * 100;
+
+        scoreTotalSessao += scoreAtividade * ativ.nivelDificuldade;
+        pesoTotalSessao += ativ.nivelDificuldade;
+      });
+
+      // Média ponderada da sessão (evita divisão por zero)
+      const mediaSessao =
+        pesoTotalSessao > 0
+          ? Math.round(scoreTotalSessao / pesoTotalSessao)
+          : 0;
+
+      return {
+        data: sessao.dataAtendimento.toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: 'short',
+        }),
+        titulo: sessao.tituloSessao,
+        score: mediaSessao,
+      };
+    });
+
+    // Remove sessões que não tiveram atividades (score 0 por falta de dados)
+    return dadosGrafico.filter((d) => d.score > 0);
+  }
 }
