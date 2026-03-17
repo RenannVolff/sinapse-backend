@@ -13,7 +13,7 @@ interface CreateAlunoDto {
 export class AlunosService {
   constructor(private prisma: PrismaService) {}
 
-  async create(data: CreateAlunoDto) {
+  create(data: CreateAlunoDto) {
     return this.prisma.aluno.create({
       data: {
         nomeCompleto: data.nomeCompleto,
@@ -25,41 +25,62 @@ export class AlunosService {
     });
   }
 
-  async findAll() {
+  findAll() {
     return this.prisma.aluno.findMany({
       orderBy: { criadoEm: 'desc' },
     });
   }
 
-  // --- NOVA FUNÇÃO: Busca um aluno específico e seu histórico ---
   async findOne(id: string) {
     const aluno = await this.prisma.aluno.findUnique({
       where: { id },
       include: {
         atendimentos: {
-          orderBy: { dataAtendimento: 'desc' }, // Traz as sessões mais recentes primeiro
+          orderBy: { dataAtendimento: 'desc' },
         },
       },
     });
 
-    if (!aluno) {
-      throw new NotFoundException('Aluno não encontrado na base de dados.');
-    }
-
+    if (!aluno) throw new NotFoundException('Aluno não encontrado.');
     return aluno;
   }
 
-  async gerarDadosEvolucao(alunoId: string) {
+  // --- RELATÓRIO AUTÔNOMO (HEURÍSTICO) ---
+  async gerarRelatorioInteligente(
+    alunoId: string,
+    dataInicioIso: string,
+    dataFimIso: string,
+  ) {
+    const inicio = new Date(dataInicioIso);
+    const fim = new Date(dataFimIso);
+    fim.setHours(23, 59, 59, 999);
+
     const sessoes = await this.prisma.atendimento.findMany({
-      where: { alunoId },
+      where: {
+        alunoId,
+        dataAtendimento: {
+          gte: inicio,
+          lte: fim,
+        },
+      },
       orderBy: { dataAtendimento: 'asc' },
       include: {
-        atividades: {
-          include: { itensChecklist: true },
-        },
+        aluno: { select: { nomeCompleto: true } },
+        atividades: { include: { itensChecklist: true } },
       },
     });
 
+    if (sessoes.length === 0) {
+      return {
+        resumoIa:
+          'Não há atendimentos registrados para este paciente no período selecionado.',
+        dadosGrafico: [],
+      };
+    }
+
+    const nomeAluno = sessoes[0].aluno.nomeCompleto;
+
+    // 1. Calcula os gráficos matemáticos
     const dadosGrafico = sessoes.map((sessao) => {
       let scoreTotalSessao = 0;
       let pesoTotalSessao = 0;
@@ -80,13 +101,51 @@ export class AlunosService {
       return {
         data: sessao.dataAtendimento.toLocaleDateString('pt-BR', {
           day: '2-digit',
-          month: 'short',
+          month: '2-digit',
         }),
         titulo: sessao.tituloSessao,
         score: mediaSessao,
       };
     });
 
-    return dadosGrafico.filter((d) => d.score > 0);
+    const dadosValidos = dadosGrafico.filter((d) => d.score > 0);
+
+    let resumoIa = '';
+
+    if (dadosValidos.length > 0) {
+      const numSessoes = dadosValidos.length;
+      const mediaGeral = Math.round(
+        dadosValidos.reduce((acc, curr) => acc + curr.score, 0) / numSessoes,
+      );
+
+      const primeiraSessao = dadosValidos[0].score;
+      const ultimaSessao = dadosValidos[numSessoes - 1].score;
+
+      let tendencia = '';
+      if (numSessoes === 1)
+        tendencia = 'estabilidade inicial (apenas uma sessão analisada)';
+      else if (ultimaSessao > primeiraSessao + 5)
+        tendencia = 'evolução progressiva do quadro';
+      else if (ultimaSessao < primeiraSessao - 5)
+        tendencia = 'declínio no rendimento, exigindo atenção';
+      else tendencia = 'estabilidade cognitiva';
+
+      let avaliacao = '';
+      if (mediaGeral >= 80)
+        avaliacao = 'excelente assimilação das atividades propostas';
+      else if (mediaGeral >= 50)
+        avaliacao =
+          'desenvolvimento dentro do esperado para o nível de dificuldade';
+      else
+        avaliacao =
+          'necessidade de maior intervenção e adaptação dos estímulos';
+
+      resumoIa = `Análise Sistêmica Automática: No período selecionado, o aprendente ${nomeAluno} realizou atividades avaliativas com pontuação válida em ${numSessoes} sessão(ões). A média global de desempenho cognitivo-matemático foi de ${mediaGeral}%, indicando uma ${avaliacao}. Ao observar o histórico, nota-se uma tendência de ${tendencia}. O sistema recomenda a continuidade dos atendimentos ajustando o nível de dificuldade com base nesta métrica.`;
+    } else {
+      resumoIa =
+        'As sessões encontradas não possuem atividades com checklists marcados para gerar o laudo matemático.';
+    }
+
+    return { resumoIa, dadosGrafico: dadosValidos };
   }
 }

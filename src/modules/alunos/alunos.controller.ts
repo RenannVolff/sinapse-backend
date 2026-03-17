@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AlunosService } from './alunos.service';
 
 interface CreateAlunoBody {
@@ -27,16 +27,30 @@ export class AlunosController {
     return this.alunosService.findAll();
   }
 
-  // --- NOVA ROTA: Perfil do Aluno ---
   @Get(':id')
   @ApiOperation({ summary: 'Busca os detalhes e histórico de um aluno' })
   findOne(@Param('id') id: string) {
     return this.alunosService.findOne(id);
   }
 
-  @Get(':id/evolucao')
-  @ApiOperation({ summary: 'Gera os dados do gráfico matemático de evolução' })
-  getEvolucao(@Param('id') id: string) {
-    return this.alunosService.gerarDadosEvolucao(id);
+  // --- ROTA ATUALIZADA: Recebe as datas de Início e Fim da URL ---
+  @Get(':id/relatorio-ia')
+  @ApiOperation({ summary: 'Gera gráfico e laudo de IA filtrado por data' })
+  @ApiQuery({
+    name: 'inicio',
+    required: true,
+    description: 'Data de início (YYYY-MM-DD)',
+  })
+  @ApiQuery({
+    name: 'fim',
+    required: true,
+    description: 'Data de fim (YYYY-MM-DD)',
+  })
+  getRelatorioCompleto(
+    @Param('id') id: string,
+    @Query('inicio') inicio: string,
+    @Query('fim') fim: string,
+  ) {
+    return this.alunosService.gerarRelatorioInteligente(id, inicio, fim);
   }
 }

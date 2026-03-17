@@ -1,27 +1,32 @@
 import { Controller, Post, Body, Patch, Param } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AtividadesService } from './atividades.service';
-import { CreateAtividadeDto } from './dto/create-atividade.dto';
 
+@ApiTags('Atividades')
 @Controller('atividades')
 export class AtividadesController {
-  constructor(private readonly service: AtividadesService) {}
+  constructor(private readonly atividadesService: AtividadesService) {}
 
   @Post()
-  create(@Body() dto: CreateAtividadeDto) {
-    return this.service.create(dto);
+  @ApiOperation({ summary: 'Cria uma atividade com 5 tentativas' })
+  create(
+    @Body()
+    body: {
+      atendimentoId: string;
+      titulo: string;
+      nivelDificuldade: number;
+    },
+  ) {
+    return this.atividadesService.create(body);
   }
 
-  // Marcar tentativa (Checkbox)
-  @Patch('tentativa/:id')
-  toggleItem(@Param('id') id: string, @Body('realizado') realizado: boolean) {
-    return this.service.toggleItem(id, realizado);
-  }
-
-  // Salvar a observação geral da atividade
-  // Rota: PATCH /atividades/observacao/uuid-da-atividade
-  // Body: { "texto": "O aluno teve dificuldade na preensão..." }
-  @Patch('observacao/:id')
-  updateObservacao(@Param('id') id: string, @Body('texto') texto: string) {
-    return this.service.updateObservacao(id, texto);
+  // --- A ROTA QUE FALTAVA ---
+  @Patch('checklist/:id')
+  @ApiOperation({ summary: 'Marca ou desmarca uma tentativa (Checklist)' })
+  updateChecklist(
+    @Param('id') id: string,
+    @Body() body: { realizado: boolean },
+  ) {
+    return this.atividadesService.updateChecklist(id, body.realizado);
   }
 }
