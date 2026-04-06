@@ -1,41 +1,26 @@
-import { Injectable, ConflictException } from '@nestjs/common';
-import { CreateUsuarioDto } from './create-usuario.dto';
-import { PrismaService } from '../../../prisma/prisma.service';
-import * as bcrypt from 'bcrypt';
+import { IsString, IsEmail, IsOptional, MinLength } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
-@Injectable()
-export class UsuariosService {
-  constructor(private prisma: PrismaService) {}
+export class UpdateUsuarioDto {
+  @ApiPropertyOptional({
+    description: 'Nome do profissional',
+    example: 'João Silva',
+  })
+  @IsOptional()
+  @IsString({ message: 'O nome deve ser um texto válido.' })
+  nome?: string;
 
-  async create(createUsuarioDto: CreateUsuarioDto) {
-    // Verifica se o email já existe
-    const usuarioExiste = await this.prisma.usuario.findUnique({
-      where: { email: createUsuarioDto.email },
-    });
+  @ApiPropertyOptional({
+    description: 'E-mail de acesso',
+    example: 'admin@sinapse.edu.br',
+  })
+  @IsOptional()
+  @IsEmail({}, { message: 'O e-mail fornecido não tem um formato válido.' })
+  email?: string;
 
-    if (usuarioExiste) {
-      throw new ConflictException('Email já cadastrado.');
-    }
-
-    // Criptografia da senha
-    const senhaHash = await bcrypt.hash(createUsuarioDto.senha, 10);
-
-    // Cria no Banco de Dados
-    return this.prisma.usuario.create({
-      data: {
-        nome: createUsuarioDto.nome,
-        email: createUsuarioDto.email,
-        senhaHash,
-      },
-      select: {
-        id: true,
-        nome: true,
-        email: true,
-      },
-    });
-  }
-
-  findAll() {
-    return this.prisma.usuario.findMany();
-  }
+  @ApiPropertyOptional({ description: 'Nova senha de acesso', minLength: 6 })
+  @IsOptional()
+  @IsString({ message: 'A senha deve ser um texto válido.' })
+  @MinLength(6, { message: 'A senha deve conter no mínimo 6 caracteres.' })
+  senha?: string;
 }

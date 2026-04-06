@@ -1,8 +1,13 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
+
+export interface JwtPayload {
+  sub: string;
+  email: string;
+}
 
 @Injectable()
 export class AuthService {
@@ -11,30 +16,25 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async login(loginDto: LoginDto) {
-    const { email, senha } = loginDto;
-
-    // 1. Busca usuário pelo email
+  async login(dados: LoginDto) {
     const usuario = await this.prisma.usuario.findUnique({
-      where: { email },
+      where: { email: dados.email },
     });
 
     if (!usuario) {
-      throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException('Credenciais inválidas.');
     }
 
-    // 2. Compara a senha digitada com o hash do banco
-    const senhaValida = await bcrypt.compare(senha, usuario.senhaHash);
+    const senhaValida = await bcrypt.compare(dados.senha, usuario.senhaHash);
 
     if (!senhaValida) {
-      throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException('Credenciais inválidas.');
     }
 
-    // 3. Gera o Token de Acesso (JWT)
-    const payload = { sub: usuario.id, email: usuario.email };
+    const payload: JwtPayload = { sub: usuario.id, email: usuario.email };
 
     return {
-      access_token: await this.jwtService.signAsync(payload),
+      token: await this.jwtService.signAsync(payload),
       usuario: {
         id: usuario.id,
         nome: usuario.nome,

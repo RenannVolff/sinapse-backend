@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  Patch,
+  Delete,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AtendimentosService } from './atendimentos.service';
 
@@ -23,7 +34,6 @@ export class AtendimentosController {
   @Get('calendario')
   @ApiOperation({ summary: 'Busca as sessões para a listagem da agenda' })
   findAll(@Query('mes') mes: string, @Query('ano') ano: string) {
-    // Converte os query params de string para número de forma segura
     return this.atendimentosService.findAllCalendario(Number(mes), Number(ano));
   }
 
@@ -31,5 +41,21 @@ export class AtendimentosController {
   @ApiOperation({ summary: 'Busca os detalhes completos de uma sessão ativa' })
   findOne(@Param('id') id: string) {
     return this.atendimentosService.findOne(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Atualiza os dados de uma sessão (Reagendamento)' })
+  update(
+    @Param('id') id: string,
+    @Body() updateDto: Partial<CreateAtendimentoBody>,
+  ) {
+    return this.atendimentosService.update(id, updateDto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Cancela e exclui uma sessão agendada' })
+  remove(@Param('id') id: string) {
+    return this.atendimentosService.remove(id);
   }
 }

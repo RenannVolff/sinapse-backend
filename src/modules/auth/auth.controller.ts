@@ -1,27 +1,19 @@
-import { Body, Controller, Post, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { LoginDto } from './dto/login.dto';
-import { IsPublic } from './decorators/is-public.decorator'; // <--- Importante
+import { IsPublic } from './decorators/is-public.decorator';
 
-@ApiTags('Auth')
+@ApiTags('Autenticação')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @IsPublic() // <--- Libera esta rota da guarda global
-  @HttpCode(HttpStatus.OK)
+  @IsPublic()
   @Post('login')
-  @ApiOperation({ summary: 'Realiza login seguro e retorna Token JWT' })
-  @ApiResponse({
-    status: 200,
-    description: 'Login realizado com sucesso',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Credenciais inválidas',
-  })
-  signIn(@Body() loginDto: LoginDto) {
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Realiza o login e retorna o Token JWT' })
+  login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
 }

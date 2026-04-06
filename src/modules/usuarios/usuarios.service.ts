@@ -1,41 +1,62 @@
-import { Injectable, ConflictException } from '@nestjs/common';
-import { CreateUsuarioDto } from './dto/create-usuario.dto';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UpdateUsuarioDto } from './dto/update-usuario.dto';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class UsuariosService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  async create(createUsuarioDto: CreateUsuarioDto) {
-    // Verifica se o email já existe
-    const usuarioExiste = await this.prisma.usuario.findUnique({
-      where: { email: createUsuarioDto.email },
+  async update(id: string, data: UpdateUsuarioDto) {
+    const usuarioAtual = await this.prisma.usuario.findUnique({
+      where: { id },
     });
-
-    if (usuarioExiste) {
-      throw new ConflictException('Email já cadastrado.');
+    if (!usuarioAtual) {
+      throw new NotFoundException('Usuário não encontrado no sistema.');
     }
 
-    // Criptografia da senha
-    const senhaHash: string = await bcrypt.hash(createUsuarioDto.senha, 10);
+    if (data.email && data.email !== usuarioAtual.email) {
+      const emailEmUso = await this.prisma.usuario.findUnique({
+        where: { email: data.email },
+      });
+      if (emailEmUso) {
+        throw new ConflictException(
+          'Este e-mail já está sendo utilizado por outro profissional.',
+        );
+      }
+    }
 
-    // Cria no Banco de Dados
-    return this.prisma.usuario.create({
-      data: {
-        nome: createUsuarioDto.nome,
-        email: createUsuarioDto.email,
-        senhaHash,
-      },
-      select: {
-        id: true,
-        nome: true,
-        email: true,
-      },
-    });
-  }
+    const dadosParaAtualizar: Prisma.UsuarioUpdateInput = {};
+    if (data.nome) dadosParaAtualizar.nome = data.nome;
+    if (data.email) dadosParaAtualizar.email = data.email;
+    // A CORREÇÃO DE OURO: O campo do DTO é 'senha', mas salvamos em 'senhaHash' no banco!
+    if (data.senha) {
+      const saltRounds = 10;
+      const hashGerado = await bcrypt.hash(data.senha, saltRounds);
+      dadosParaAtualizar.senhaHash = hashGerado; // <-- AQUI!
+    }
 
-  findAll() {
-    return this.prisma.usuario.findMany();
+    try {
+      return await this.prisma.usuario.update({
+        where: { id },
+        data: dadosParaAtualizar,
+        select: {
+          id: true,
+          nome: true,
+          email: true,
+        },
+      });
+    } catch (error: unknown) {
+      console.error('Erro CRÍTICO no banco ao atualizar usuário:', error);
+      throw new InternalServerErrorException(
+        'Ocorreu um erro interno no banco de dados.',
+      );
+    }
   }
 }

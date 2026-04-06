@@ -8,6 +8,8 @@ interface CreateAtendimentoDto {
   observacoes?: string;
 }
 
+type UpdateAtendimentoDto = Partial<CreateAtendimentoDto>;
+
 @Injectable()
 export class AtendimentosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -24,7 +26,6 @@ export class AtendimentosService {
   }
 
   async findAllCalendario(mes: number, ano: number) {
-    // Busca do primeiro ao último dia do mês
     const dataInicio = new Date(ano, mes - 1, 1);
     const dataFim = new Date(ano, mes, 0, 23, 59, 59);
 
@@ -46,27 +47,18 @@ export class AtendimentosService {
     });
   }
 
-  // === A FUNÇÃO QUE FALTAVA (COM O PRISMA CORRIGIDO) ===
   async findOne(id: string) {
     const atendimento = await this.prisma.atendimento.findUnique({
       where: { id },
       include: {
         aluno: {
-          select: {
-            nomeCompleto: true,
-          },
+          select: { nomeCompleto: true },
         },
         atividades: {
-          // Solução segura: usa o ID para manter a ordem de criação sem causar erros de nome de coluna
-          orderBy: {
-            id: 'asc',
-          },
+          orderBy: { id: 'asc' },
           include: {
             itensChecklist: {
-              // Garante que a 1ª, 2ª, 3ª tentativa fiquem na ordem correta
-              orderBy: {
-                id: 'asc',
-              },
+              orderBy: { id: 'asc' },
             },
           },
         },
@@ -78,5 +70,29 @@ export class AtendimentosService {
     }
 
     return atendimento;
+  }
+
+  async update(id: string, data: UpdateAtendimentoDto) {
+    await this.findOne(id);
+
+    const dadosAtualizados = { ...data };
+    if (dadosAtualizados.dataAtendimento) {
+      dadosAtualizados.dataAtendimento = new Date(
+        dadosAtualizados.dataAtendimento,
+      );
+    }
+
+    return this.prisma.atendimento.update({
+      where: { id },
+      data: dadosAtualizados,
+    });
+  }
+
+  async remove(id: string) {
+    await this.findOne(id);
+
+    return this.prisma.atendimento.delete({
+      where: { id },
+    });
   }
 }
