@@ -36,6 +36,14 @@ model Aluno {
 }
 
 // --- TABELA DE ATENDIMENTOS ---
+
+// Definição dos Status possíveis
+enum StatusAtendimento {
+  AGENDADO
+  EM_ANDAMENTO
+  CONCLUIDO
+  CANCELADO
+}
 model Atendimento {
   id              String      @id @default(uuid())
   alunoId         String
@@ -43,6 +51,7 @@ model Atendimento {
   dataAtendimento DateTime
   tituloSessao    String
   observacoes     String?     // Texto longo para observações gerais
+  status          StatusAtendimento @default(AGENDADO)
   concluido       Boolean     @default(false)
   atividades      Atividade[]
 
