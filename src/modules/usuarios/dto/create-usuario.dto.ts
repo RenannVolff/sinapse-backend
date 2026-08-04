@@ -11,12 +11,12 @@ export class CreateUsuarioDto {
   @ApiProperty({ description: 'Nome completo do profissional' })
   @IsString()
   @IsNotEmpty({ message: 'O nome é obrigatório' })
-  nome: string;
+  nome!: string;
 
   @ApiProperty({ description: 'E-mail para login no sistema' })
   @IsEmail({}, { message: 'Forneça um e-mail válido' })
   @IsNotEmpty()
-  email: string;
+  email!: string;
 
   @ApiProperty({
     description:
@@ -29,5 +29,5 @@ export class CreateUsuarioDto {
     message:
       'A senha deve conter pelo menos 1 letra maiúscula, 1 minúscula, 1 número e 1 caractere especial',
   })
-  senha: string;
+  senha!: string;
 }

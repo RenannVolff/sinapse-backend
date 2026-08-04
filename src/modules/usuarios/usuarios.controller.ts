@@ -1,17 +1,21 @@
-import { Controller, Patch, Param, Body } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Post, Body, Patch, Param } from '@nestjs/common';
 import { UsuariosService } from './usuarios.service';
+import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
+import { IsPublic } from '../auth/decorators/is-public.decorator';
 
-@ApiTags('Usuários')
 @Controller('usuarios')
 export class UsuariosController {
   constructor(private readonly usuariosService: UsuariosService) {}
 
+  @IsPublic() //
+  @Post()
+  create(@Body() createUsuarioDto: CreateUsuarioDto) {
+    return this.usuariosService.create(createUsuarioDto);
+  }
+
   @Patch(':id')
-  @ApiOperation({ summary: 'Atualiza Nome, E-mail ou Senha do Profissional' })
   update(@Param('id') id: string, @Body() updateUsuarioDto: UpdateUsuarioDto) {
-    // Agora o NestJS sabe que o updateUsuarioDto já passou pela validação rigorosa!
     return this.usuariosService.update(id, updateUsuarioDto);
   }
 }
