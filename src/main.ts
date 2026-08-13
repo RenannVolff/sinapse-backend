@@ -26,7 +26,7 @@ async function bootstrap() {
     )
     .setVersion('1.0')
     .addTag('Auth', 'Gestão de Acesso e Profissionais')
-    .addTag('Alunos', 'Gestão de Pacientes')
+    .addTag('Aprendentes', 'Gestão de Pacientes')
     .addTag('Atendimentos', 'Calendário e Sessões')
     .addTag('Atividades', 'Protocolos e Checklists')
     .addTag('Relatórios', 'Inteligência de Dados e Gráficos')
@@ -37,4 +37,4 @@ async function bootstrap() {
 
   await app.listen(3000);
 }
-bootstrap();
+void bootstrap();

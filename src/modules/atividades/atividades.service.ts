@@ -1,15 +1,24 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class AtividadesService {
   constructor(private prisma: PrismaService) {}
 
-  create(data: {
-    atendimentoId: string;
-    titulo: string;
-    nivelDificuldade: number;
-  }) {
+  async create(
+    data: {
+      atendimentoId: string;
+      titulo: string;
+      nivelDificuldade: number;
+    },
+    usuarioId: string,
+  ) {
+    const atendimento = await this.prisma.atendimento.findFirst({
+      where: { id: data.atendimentoId, aprendente: { usuarioId } },
+    });
+    if (!atendimento)
+      throw new NotFoundException('Atendimento não encontrado.');
+
     return this.prisma.atividade.create({
       data: {
         atendimentoId: data.atendimentoId,
@@ -29,7 +38,15 @@ export class AtividadesService {
   }
 
   // --- A FUNÇÃO QUE FALTAVA: Atualiza a caixa marcada ---
-  updateChecklist(id: string, realizado: boolean) {
+  async updateChecklist(id: string, realizado: boolean, usuarioId: string) {
+    const item = await this.prisma.itemChecklist.findFirst({
+      where: {
+        id,
+        atividade: { atendimento: { aprendente: { usuarioId } } },
+      },
+    });
+    if (!item) throw new NotFoundException('Item de checklist não encontrado.');
+
     return this.prisma.itemChecklist.update({
       where: { id },
       data: { realizado },

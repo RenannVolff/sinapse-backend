@@ -10,29 +10,29 @@ datasource db {
 
 // --- TABELA DE USUÁRIOS (PROFISSIONAIS/TERAPEUTAS) ---
 model Usuario {
-  id        String   @id @default(uuid())
-  nome      String
-  email     String   @unique
-  senhaHash String
-  criadoEm  DateTime @default(now())
-  alunos    Aluno[]
+  id          String        @id @default(uuid())
+  nome        String
+  email       String        @unique
+  senhaHash   String
+  criadoEm    DateTime      @default(now())
+  aprendentes Aprendente[]
 
   @@map("usuarios")
 }
 
-// --- TABELA DE ALUNOS ---
-model Aluno {
-  id             String      @id @default(uuid())
+// --- TABELA DE APRENDENTES ---
+model Aprendente {
+  id             String        @id @default(uuid())
   nomeCompleto   String
   dataNascimento DateTime
   responsavel    String?
   contato        String?
-  criadoEm       DateTime    @default(now())
+  criadoEm       DateTime      @default(now())
   usuarioId      String
-  usuario        Usuario     @relation(fields: [usuarioId], references: [id])
+  usuario        Usuario       @relation(fields: [usuarioId], references: [id])
   atendimentos   Atendimento[]
 
-  @@map("alunos")
+  @@map("aprendentes")
 }
 
 // --- TABELA DE ATENDIMENTOS ---
@@ -46,8 +46,8 @@ enum StatusAtendimento {
 }
 model Atendimento {
   id              String      @id @default(uuid())
-  alunoId         String
-  aluno           Aluno       @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  aprendenteId    String
+  aprendente      Aprendente  @relation(fields: [aprendenteId], references: [id], onDelete: Cascade)
   dataAtendimento DateTime
   tituloSessao    String
   observacoes     String?     // Texto longo para observações gerais
@@ -55,7 +55,7 @@ model Atendimento {
   concluido       Boolean     @default(false)
   atividades      Atividade[]
 
-  @@index([alunoId, dataAtendimento])
+  @@index([aprendenteId, dataAtendimento])
   @@map("atendimentos")
 }
 

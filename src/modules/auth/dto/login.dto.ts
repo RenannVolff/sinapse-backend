@@ -8,7 +8,7 @@ export class LoginDto {
   })
   @IsEmail({}, { message: 'E-mail inválido' })
   @IsNotEmpty({ message: 'O e-mail é obrigatório' })
-  email: string;
+  email!: string;
 
   @ApiProperty({
     description: 'Senha de acesso',
@@ -16,5 +16,5 @@ export class LoginDto {
   })
   @IsString()
   @IsNotEmpty({ message: 'A senha é obrigatória' })
-  senha: string;
+  senha!: string;
 }

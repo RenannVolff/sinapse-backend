@@ -7,10 +7,16 @@ export class RelatoriosService {
   constructor(private prisma: PrismaService) {}
 
   // Gera os dados para o Gráfico de Linha Dupla
-  async gerarGraficoEvolucao(alunoId: string, inicio?: Date, fim?: Date) {
+  async gerarGraficoEvolucao(
+    aprendenteId: string,
+    usuarioId: string,
+    inicio?: Date,
+    fim?: Date,
+  ) {
     // Construção do objeto WHERE com tipagem do Prisma
     const whereCondition: Prisma.AtendimentoWhereInput = {
-      alunoId,
+      aprendenteId,
+      aprendente: { usuarioId },
       concluido: true,
     };
 

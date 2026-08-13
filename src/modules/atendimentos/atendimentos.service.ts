@@ -11,13 +11,13 @@ import {
   IsOptional,
   IsBoolean,
   IsEnum,
-} from 'class-validator'; // <-- Importações de Segurança
+} from 'class-validator'; // Importações de Segurança
 
 // DTOs blindados para o NestJS aceitar os dados
 export class CreateAtendimentoDto {
   @IsNotEmpty({ message: 'O identificador do aprendente é obrigatório.' })
   @IsString()
-  alunoId!: string;
+  aprendenteId!: string;
 
   @IsNotEmpty({ message: 'A data do atendimento é obrigatória.' })
   dataAtendimento!: string | Date;
@@ -56,11 +56,16 @@ export class UpdateAtendimentoDto {
 export class AtendimentosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: CreateAtendimentoDto) {
+  async create(data: CreateAtendimentoDto, usuarioId: string) {
+    const aprendente = await this.prisma.aprendente.findFirst({
+      where: { id: data.aprendenteId, usuarioId },
+    });
+    if (!aprendente) throw new NotFoundException('Aprendente não encontrado.');
+
     try {
       return await this.prisma.atendimento.create({
         data: {
-          alunoId: data.alunoId,
+          aprendenteId: data.aprendenteId,
           dataAtendimento: new Date(data.dataAtendimento),
           tituloSessao: data.tituloSessao,
           observacoes: data.observacoes,
@@ -76,29 +81,30 @@ export class AtendimentosService {
     }
   }
 
-  async findAllCalendario(mes: number, ano: number) {
+  async findAllCalendario(mes: number, ano: number, usuarioId: string) {
     const dataInicio = new Date(ano, mes - 1, 1);
     const dataFim = new Date(ano, mes, 0, 23, 59, 59);
 
     return this.prisma.atendimento.findMany({
       where: {
+        aprendente: { usuarioId },
         dataAtendimento: {
           gte: dataInicio,
           lte: dataFim,
         },
       },
       include: {
-        aluno: { select: { nomeCompleto: true } },
+        aprendente: { select: { nomeCompleto: true } },
       },
       orderBy: { dataAtendimento: 'asc' },
     });
   }
 
-  async findOne(id: string) {
-    const atendimento = await this.prisma.atendimento.findUnique({
-      where: { id },
+  async findOne(id: string, usuarioId: string) {
+    const atendimento = await this.prisma.atendimento.findFirst({
+      where: { id, aprendente: { usuarioId } },
       include: {
-        aluno: { select: { nomeCompleto: true } },
+        aprendente: { select: { nomeCompleto: true } },
         atividades: {
           orderBy: { id: 'asc' },
           include: {
@@ -112,8 +118,8 @@ export class AtendimentosService {
     return atendimento;
   }
 
-  async update(id: string, data: UpdateAtendimentoDto) {
-    await this.findOne(id);
+  async update(id: string, data: UpdateAtendimentoDto, usuarioId: string) {
+    await this.findOne(id, usuarioId);
 
     const dadosAtualizados: Prisma.AtendimentoUpdateInput = {};
 

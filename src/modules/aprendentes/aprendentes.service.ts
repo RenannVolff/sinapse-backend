@@ -1,39 +1,33 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-
-interface CreateAlunoDto {
-  nomeCompleto: string;
-  dataNascimento: string | Date;
-  responsavel: string;
-  contato: string;
-  usuarioId: string;
-}
+import { CreateAprendenteDto } from './dto/create-aprendente.dto';
 
 @Injectable()
-export class AlunosService {
+export class AprendentesService {
   constructor(private prisma: PrismaService) {}
 
-  create(data: CreateAlunoDto) {
-    return this.prisma.aluno.create({
+  create(data: CreateAprendenteDto, usuarioId: string) {
+    return this.prisma.aprendente.create({
       data: {
         nomeCompleto: data.nomeCompleto,
         dataNascimento: new Date(data.dataNascimento),
         responsavel: data.responsavel,
         contato: data.contato,
-        usuarioId: data.usuarioId,
+        usuarioId,
       },
     });
   }
 
-  findAll() {
-    return this.prisma.aluno.findMany({
+  findAll(usuarioId: string) {
+    return this.prisma.aprendente.findMany({
+      where: { usuarioId },
       orderBy: { criadoEm: 'desc' },
     });
   }
 
-  async findOne(id: string) {
-    const aluno = await this.prisma.aluno.findUnique({
-      where: { id },
+  async findOne(id: string, usuarioId: string) {
+    const aprendente = await this.prisma.aprendente.findFirst({
+      where: { id, usuarioId },
       include: {
         atendimentos: {
           orderBy: { dataAtendimento: 'desc' },
@@ -41,15 +35,16 @@ export class AlunosService {
       },
     });
 
-    if (!aluno) throw new NotFoundException('Aluno não encontrado.');
-    return aluno;
+    if (!aprendente) throw new NotFoundException('Aprendente não encontrado.');
+    return aprendente;
   }
 
   // --- RELATÓRIO AUTÔNOMO (HEURÍSTICO) ---
   async gerarRelatorioInteligente(
-    alunoId: string,
+    aprendenteId: string,
     dataInicioIso: string,
     dataFimIso: string,
+    usuarioId: string,
   ) {
     const inicio = new Date(dataInicioIso);
     const fim = new Date(dataFimIso);
@@ -57,7 +52,8 @@ export class AlunosService {
 
     const sessoes = await this.prisma.atendimento.findMany({
       where: {
-        alunoId,
+        aprendenteId,
+        aprendente: { usuarioId },
         dataAtendimento: {
           gte: inicio,
           lte: fim,
@@ -65,7 +61,7 @@ export class AlunosService {
       },
       orderBy: { dataAtendimento: 'asc' },
       include: {
-        aluno: { select: { nomeCompleto: true } },
+        aprendente: { select: { nomeCompleto: true } },
         atividades: { include: { itensChecklist: true } },
       },
     });
@@ -78,7 +74,7 @@ export class AlunosService {
       };
     }
 
-    const nomeAluno = sessoes[0].aluno.nomeCompleto;
+    const nomeAprendente = sessoes[0].aprendente.nomeCompleto;
 
     // 1. Calcula os gráficos matemáticos
     const dadosGrafico = sessoes.map((sessao) => {
@@ -140,7 +136,7 @@ export class AlunosService {
         avaliacao =
           'necessidade de maior intervenção e adaptação dos estímulos';
 
-      resumoIa = `Análise Sistêmica Automática: No período selecionado, o aprendente ${nomeAluno} realizou atividades avaliativas com pontuação válida em ${numSessoes} sessão(ões). A média global de desempenho cognitivo-matemático foi de ${mediaGeral}%, indicando uma ${avaliacao}. Ao observar o histórico, nota-se uma tendência de ${tendencia}. O sistema recomenda a continuidade dos atendimentos ajustando o nível de dificuldade com base nesta métrica.`;
+      resumoIa = `Análise Sistêmica Automática: No período selecionado, o aprendente ${nomeAprendente} realizou atividades avaliativas com pontuação válida em ${numSessoes} sessão(ões). A média global de desempenho cognitivo-matemático foi de ${mediaGeral}%, indicando uma ${avaliacao}. Ao observar o histórico, nota-se uma tendência de ${tendencia}. O sistema recomenda a continuidade dos atendimentos ajustando o nível de dificuldade com base nesta métrica.`;
     } else {
       resumoIa =
         'As sessões encontradas não possuem atividades com checklists marcados para gerar o laudo matemático.';

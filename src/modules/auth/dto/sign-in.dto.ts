@@ -8,14 +8,14 @@ export class SignInDto {
   })
   @IsEmail({}, { message: 'Informe um endereço de e-mail válido' })
   @IsNotEmpty({ message: 'O e-mail é obrigatório' })
-  email: string;
+  email!: string;
 
   @ApiProperty({
     description: 'Senha de acesso',
-    example: '123456',
+    example: 'Clc26-0510',
   })
   @IsString()
   @IsNotEmpty({ message: 'A senha é obrigatória' })
-  @MinLength(6, { message: 'A senha deve ter no mínimo 6 caracteres' })
-  senha: string;
+  @MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres' })
+  senha!: string;
 }

@@ -5,7 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  async getDashboardStats() {
+  async getDashboardStats(usuarioId: string) {
     // 1. Datas de hoje para filtrar atendimentos do dia
     const hojeInicio = new Date();
     hojeInicio.setHours(0, 0, 0, 0);
@@ -14,14 +14,15 @@ export class DashboardService {
     hojeFim.setHours(23, 59, 59, 999);
 
     // 2. Executa todas as consultas em paralelo (Performance extrema)
-    const [totalAlunos, atendimentosHoje, totalAtividades, mediaGeral] =
+    const [totalAprendentes, atendimentosHoje, totalAtividades, mediaGeral] =
       await Promise.all([
-        // A. Conta alunos ativos
-        this.prisma.aluno.count(),
+        // A. Conta aprendentes ativos do usuário
+        this.prisma.aprendente.count({ where: { usuarioId } }),
 
         // B. Conta atendimentos agendados para HOJE
         this.prisma.atendimento.count({
           where: {
+            aprendente: { usuarioId },
             dataAtendimento: {
               gte: hojeInicio,
               lte: hojeFim,
@@ -31,11 +32,15 @@ export class DashboardService {
 
         // C. Conta total de atividades realizadas (Checklist marcado)
         this.prisma.itemChecklist.count({
-          where: { realizado: true },
+          where: {
+            realizado: true,
+            atividade: { atendimento: { aprendente: { usuarioId } } },
+          },
         }),
 
-        // D. Calcula a média de evolução de TODOS os alunos (Score Ponderado)
+        // D. Calcula a média de evolução de TODOS os aprendentes do usuário (Score Ponderado)
         this.prisma.atividade.aggregate({
+          where: { atendimento: { aprendente: { usuarioId } } },
           _avg: {
             scorePonderado: true,
           },
@@ -44,7 +49,7 @@ export class DashboardService {
 
     // Retorna o objeto pronto para os Cards
     return {
-      totalAlunos,
+      totalAprendentes,
       atendimentosHoje,
       atividadesRealizadas: totalAtividades,
       mediaEvolucao: Math.round(mediaGeral._avg.scorePonderado || 0),
@@ -52,13 +57,14 @@ export class DashboardService {
   }
 
   // Gera dados reais para o Gráfico de Barras (Atendimentos nos últimos 7 dias)
-  async getGraficoSemanal() {
+  async getGraficoSemanal(usuarioId: string) {
     const hoje = new Date();
     const seteDiasAtras = new Date();
     seteDiasAtras.setDate(hoje.getDate() - 6);
 
     const atendimentos = await this.prisma.atendimento.findMany({
       where: {
+        aprendente: { usuarioId },
         dataAtendimento: {
           gte: seteDiasAtras,
         },

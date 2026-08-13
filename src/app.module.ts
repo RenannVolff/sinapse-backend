@@ -3,7 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
-import { AlunosModule } from './modules/alunos/alunos.module';
+import { AprendentesModule } from './modules/aprendentes/aprendentes.module';
 import { AtendimentosModule } from './modules/atendimentos/atendimentos.module';
 import { AtividadesModule } from './modules/atividades/atividades.module';
 import { RelatoriosModule } from './modules/relatorios/relatorios.module';
@@ -15,7 +15,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
   imports: [
     PrismaModule,
     UsuariosModule,
-    AlunosModule,
+    AprendentesModule,
     AtendimentosModule,
     AtividadesModule,
     RelatoriosModule,
