@@ -6,6 +6,9 @@ import {
   Param,
   Query,
   Patch,
+  Delete,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 
 import {
@@ -53,5 +56,11 @@ export class AtendimentosController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.atendimentosService.update(id, updateDto, user.id);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.atendimentosService.remove(id, user.id);
   }
 }

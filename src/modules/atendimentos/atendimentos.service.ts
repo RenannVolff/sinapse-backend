@@ -58,7 +58,7 @@ export class AtendimentosService {
 
   async create(data: CreateAtendimentoDto, usuarioId: string) {
     const aprendente = await this.prisma.aprendente.findFirst({
-      where: { id: data.aprendenteId, usuarioId },
+      where: { id: data.aprendenteId, usuarioId, deletedAt: null },
     });
     if (!aprendente) throw new NotFoundException('Aprendente não encontrado.');
 
@@ -88,6 +88,7 @@ export class AtendimentosService {
     return this.prisma.atendimento.findMany({
       where: {
         aprendente: { usuarioId },
+        deletedAt: null,
         dataAtendimento: {
           gte: dataInicio,
           lte: dataFim,
@@ -102,7 +103,7 @@ export class AtendimentosService {
 
   async findOne(id: string, usuarioId: string) {
     const atendimento = await this.prisma.atendimento.findFirst({
-      where: { id, aprendente: { usuarioId } },
+      where: { id, aprendente: { usuarioId }, deletedAt: null },
       include: {
         aprendente: { select: { nomeCompleto: true } },
         atividades: {
@@ -143,5 +144,14 @@ export class AtendimentosService {
         'Erro ao atualizar a sessão no banco de dados.',
       );
     }
+  }
+
+  async remove(id: string, usuarioId: string) {
+    await this.findOne(id, usuarioId);
+
+    return this.prisma.atendimento.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

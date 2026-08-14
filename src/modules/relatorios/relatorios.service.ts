@@ -17,6 +17,7 @@ export class RelatoriosService {
     const whereCondition: Prisma.AtendimentoWhereInput = {
       aprendenteId,
       aprendente: { usuarioId },
+      deletedAt: null,
       concluido: true,
     };
 

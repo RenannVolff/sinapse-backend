@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Query,
+  Delete,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AprendentesService } from './aprendentes.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
@@ -29,6 +39,16 @@ export class AprendentesController {
   @ApiOperation({ summary: 'Busca os detalhes e histórico de um aprendente' })
   findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.aprendentesService.findOne(id, user.id);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'Exclui (soft delete) um aprendente e seus atendimentos relacionados',
+  })
+  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.aprendentesService.remove(id, user.id);
   }
 
   // --- ROTA ATUALIZADA: Recebe as datas de Início e Fim da URL ---

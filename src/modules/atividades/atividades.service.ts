@@ -14,7 +14,11 @@ export class AtividadesService {
     usuarioId: string,
   ) {
     const atendimento = await this.prisma.atendimento.findFirst({
-      where: { id: data.atendimentoId, aprendente: { usuarioId } },
+      where: {
+        id: data.atendimentoId,
+        aprendente: { usuarioId },
+        deletedAt: null,
+      },
     });
     if (!atendimento)
       throw new NotFoundException('Atendimento não encontrado.');
@@ -42,7 +46,9 @@ export class AtividadesService {
     const item = await this.prisma.itemChecklist.findFirst({
       where: {
         id,
-        atividade: { atendimento: { aprendente: { usuarioId } } },
+        atividade: {
+          atendimento: { deletedAt: null, aprendente: { usuarioId } },
+        },
       },
     });
     if (!item) throw new NotFoundException('Item de checklist não encontrado.');

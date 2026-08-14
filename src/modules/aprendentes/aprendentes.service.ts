@@ -20,16 +20,17 @@ export class AprendentesService {
 
   findAll(usuarioId: string) {
     return this.prisma.aprendente.findMany({
-      where: { usuarioId },
+      where: { usuarioId, deletedAt: null },
       orderBy: { criadoEm: 'desc' },
     });
   }
 
   async findOne(id: string, usuarioId: string) {
     const aprendente = await this.prisma.aprendente.findFirst({
-      where: { id, usuarioId },
+      where: { id, usuarioId, deletedAt: null },
       include: {
         atendimentos: {
+          where: { deletedAt: null },
           orderBy: { dataAtendimento: 'desc' },
         },
       },
@@ -37,6 +38,25 @@ export class AprendentesService {
 
     if (!aprendente) throw new NotFoundException('Aprendente não encontrado.');
     return aprendente;
+  }
+
+  async remove(id: string, usuarioId: string) {
+    const aprendente = await this.prisma.aprendente.findFirst({
+      where: { id, usuarioId, deletedAt: null },
+    });
+    if (!aprendente) throw new NotFoundException('Aprendente não encontrado.');
+
+    const agora = new Date();
+    await this.prisma.$transaction([
+      this.prisma.aprendente.update({
+        where: { id },
+        data: { deletedAt: agora },
+      }),
+      this.prisma.atendimento.updateMany({
+        where: { aprendenteId: id, deletedAt: null },
+        data: { deletedAt: agora },
+      }),
+    ]);
   }
 
   // --- RELATÓRIO AUTÔNOMO (HEURÍSTICO) ---
@@ -54,6 +74,7 @@ export class AprendentesService {
       where: {
         aprendenteId,
         aprendente: { usuarioId },
+        deletedAt: null,
         dataAtendimento: {
           gte: inicio,
           lte: fim,

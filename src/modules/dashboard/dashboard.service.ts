@@ -17,12 +17,15 @@ export class DashboardService {
     const [totalAprendentes, atendimentosHoje, totalAtividades, mediaGeral] =
       await Promise.all([
         // A. Conta aprendentes ativos do usuário
-        this.prisma.aprendente.count({ where: { usuarioId } }),
+        this.prisma.aprendente.count({
+          where: { usuarioId, deletedAt: null },
+        }),
 
         // B. Conta atendimentos agendados para HOJE
         this.prisma.atendimento.count({
           where: {
             aprendente: { usuarioId },
+            deletedAt: null,
             dataAtendimento: {
               gte: hojeInicio,
               lte: hojeFim,
@@ -34,13 +37,17 @@ export class DashboardService {
         this.prisma.itemChecklist.count({
           where: {
             realizado: true,
-            atividade: { atendimento: { aprendente: { usuarioId } } },
+            atividade: {
+              atendimento: { deletedAt: null, aprendente: { usuarioId } },
+            },
           },
         }),
 
         // D. Calcula a média de evolução de TODOS os aprendentes do usuário (Score Ponderado)
         this.prisma.atividade.aggregate({
-          where: { atendimento: { aprendente: { usuarioId } } },
+          where: {
+            atendimento: { deletedAt: null, aprendente: { usuarioId } },
+          },
           _avg: {
             scorePonderado: true,
           },
@@ -65,6 +72,7 @@ export class DashboardService {
     const atendimentos = await this.prisma.atendimento.findMany({
       where: {
         aprendente: { usuarioId },
+        deletedAt: null,
         dataAtendimento: {
           gte: seteDiasAtras,
         },

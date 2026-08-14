@@ -28,6 +28,7 @@ model Aprendente {
   responsavel    String?
   contato        String?
   criadoEm       DateTime      @default(now())
+  deletedAt      DateTime?
   usuarioId      String
   usuario        Usuario       @relation(fields: [usuarioId], references: [id])
   atendimentos   Atendimento[]
@@ -53,6 +54,7 @@ model Atendimento {
   observacoes     String?     // Texto longo para observações gerais
   status          StatusAtendimento @default(AGENDADO)
   concluido       Boolean     @default(false)
+  deletedAt       DateTime?
   atividades      Atividade[]
 
   @@index([aprendenteId, dataAtendimento])
