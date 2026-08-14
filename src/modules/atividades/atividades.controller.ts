@@ -1,6 +1,8 @@
 import { Controller, Post, Body, Patch, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { AtividadesService } from './atividades.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Atividades')
 @Controller('atividades')
@@ -16,17 +18,18 @@ export class AtividadesController {
       titulo: string;
       nivelDificuldade: number;
     },
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.atividadesService.create(body);
+    return this.atividadesService.create(body, user.id);
   }
 
-  // --- A ROTA QUE FALTAVA ---
   @Patch('checklist/:id')
   @ApiOperation({ summary: 'Marca ou desmarca uma tentativa (Checklist)' })
   updateChecklist(
     @Param('id') id: string,
     @Body() body: { realizado: boolean },
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.atividadesService.updateChecklist(id, body.realizado);
+    return this.atividadesService.updateChecklist(id, body.realizado, user.id);
   }
 }

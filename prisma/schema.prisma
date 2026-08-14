@@ -10,29 +10,30 @@ datasource db {
 
 // --- TABELA DE USUÁRIOS (PROFISSIONAIS/TERAPEUTAS) ---
 model Usuario {
-  id        String   @id @default(uuid())
-  nome      String
-  email     String   @unique
-  senhaHash String
-  criadoEm  DateTime @default(now())
-  alunos    Aluno[]
+  id          String        @id @default(uuid())
+  nome        String
+  email       String        @unique
+  senhaHash   String
+  criadoEm    DateTime      @default(now())
+  aprendentes Aprendente[]
 
   @@map("usuarios")
 }
 
-// --- TABELA DE ALUNOS ---
-model Aluno {
-  id             String      @id @default(uuid())
+// --- TABELA DE APRENDENTES ---
+model Aprendente {
+  id             String        @id @default(uuid())
   nomeCompleto   String
   dataNascimento DateTime
   responsavel    String?
   contato        String?
-  criadoEm       DateTime    @default(now())
+  criadoEm       DateTime      @default(now())
+  deletedAt      DateTime?
   usuarioId      String
-  usuario        Usuario     @relation(fields: [usuarioId], references: [id])
+  usuario        Usuario       @relation(fields: [usuarioId], references: [id])
   atendimentos   Atendimento[]
 
-  @@map("alunos")
+  @@map("aprendentes")
 }
 
 // --- TABELA DE ATENDIMENTOS ---
@@ -46,16 +47,17 @@ enum StatusAtendimento {
 }
 model Atendimento {
   id              String      @id @default(uuid())
-  alunoId         String
-  aluno           Aluno       @relation(fields: [alunoId], references: [id], onDelete: Cascade)
+  aprendenteId    String
+  aprendente      Aprendente  @relation(fields: [aprendenteId], references: [id], onDelete: Cascade)
   dataAtendimento DateTime
   tituloSessao    String
   observacoes     String?     // Texto longo para observações gerais
   status          StatusAtendimento @default(AGENDADO)
   concluido       Boolean     @default(false)
+  deletedAt       DateTime?
   atividades      Atividade[]
 
-  @@index([alunoId, dataAtendimento])
+  @@index([aprendenteId, dataAtendimento])
   @@map("atendimentos")
 }
 
@@ -88,6 +90,31 @@ model ItemChecklist {
   descricao   String
   realizado   Boolean   @default(false)
   observacao  String?   // Observação específica do item para detalhes adicionais da atividade
-  
+
   @@map("itens_checklist")
+}
+
+// --- TABELA DE TRILHA DE AUDITORIA (LGPD) ---
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  READ
+}
+
+// IMPORTANTE (produção): o usuário de aplicação do Postgres deve ter permissão
+// apenas de INSERT nesta tabela (nunca UPDATE/DELETE), garantindo a
+// imutabilidade da trilha de auditoria exigida pela LGPD. Essa restrição é
+// configurada direto no Postgres (GRANT/REVOKE), fora do código da aplicação.
+model AuditLog {
+  id         String      @id @default(uuid())
+  userId     String
+  action     AuditAction
+  resource   String
+  resourceId String?
+  ipAddress  String?
+  createdAt  DateTime    @default(now())
+
+  @@map("audit_logs")
 }
