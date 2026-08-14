@@ -90,6 +90,31 @@ model ItemChecklist {
   descricao   String
   realizado   Boolean   @default(false)
   observacao  String?   // Observação específica do item para detalhes adicionais da atividade
-  
+
   @@map("itens_checklist")
+}
+
+// --- TABELA DE TRILHA DE AUDITORIA (LGPD) ---
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  READ
+}
+
+// IMPORTANTE (produção): o usuário de aplicação do Postgres deve ter permissão
+// apenas de INSERT nesta tabela (nunca UPDATE/DELETE), garantindo a
+// imutabilidade da trilha de auditoria exigida pela LGPD. Essa restrição é
+// configurada direto no Postgres (GRANT/REVOKE), fora do código da aplicação.
+model AuditLog {
+  id         String      @id @default(uuid())
+  userId     String
+  action     AuditAction
+  resource   String
+  resourceId String?
+  ipAddress  String?
+  createdAt  DateTime    @default(now())
+
+  @@map("audit_logs")
 }
