@@ -44,6 +44,7 @@ enum StatusAtendimento {
   EM_ANDAMENTO
   CONCLUIDO
   CANCELADO
+  FALTA
 }
 model Atendimento {
   id              String      @id @default(uuid())

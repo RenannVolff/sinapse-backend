@@ -11,6 +11,7 @@ import { RelatoriosModule } from './modules/relatorios/relatorios.module';
 import { IaModule } from './modules/ia/ia.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
@@ -24,6 +25,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     IaModule,
     AuthModule,
     DashboardModule,
+    AuditLogsModule,
   ],
   controllers: [AppController],
   providers: [
