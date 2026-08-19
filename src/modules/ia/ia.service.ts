@@ -250,7 +250,7 @@ ${secoes.map((secao, i) => `${i + 1}. [${secao.titulo}] ${secao.corpo}`).join('\
       return {
         titulo,
         corpo:
-          'Ainda não há sessões concluídas com atividades registradas para estabelecer uma linha de base (baseline) e gerar uma análise de tendência.',
+          'Ainda não há sessões registradas para gerar uma análise de tendência.',
       };
     }
 
@@ -258,28 +258,28 @@ ${secoes.map((secao, i) => `${i + 1}. [${secao.titulo}] ${secao.corpo}`).join('\
       return {
         titulo,
         corpo:
-          'Ainda não há sessões suficientes (mínimo de 3) para traçar uma curva de aprendizagem estatisticamente confiável. Os dados atuais podem estar sujeitos a distorção por sessões atípicas isoladas, sendo prematuro inferir uma tendência clínica neste momento.',
+          'Ainda não há sessões suficientes (mínimo de 3) para uma análise de tendência confiável.',
       };
     }
 
     if (diferenca > 0) {
       return {
         titulo,
-        corpo: `O aprendente demonstra uma CURVA DE APRENDIZAGEM ASCENDENTE. Comparando a média das sessões mais recentes com a média das sessões iniciais do período, houve um ganho de ${diferenca.toFixed(1)} pontos ponderados. Este padrão é compatível com resposta positiva à intervenção e com indícios de neuroplasticidade favorável, sugerindo que o aprendente vem ampliando sua Zona de Desenvolvimento Proximal (ZDP), tolerando desafios de complexidade crescente sem ruptura relevante no desempenho.`,
+        corpo: `Curva de aprendizagem ASCENDENTE: ganho de ${diferenca.toFixed(1)} pontos entre o início e o fim do período, indicando resposta positiva à intervenção.`,
       };
     }
 
     if (diferenca < 0) {
       return {
         titulo,
-        corpo: `O aprendente apresenta uma CURVA DE APRENDIZAGEM DESCENDENTE (${diferenca.toFixed(1)} pontos ponderados) ao comparar a média das sessões mais recentes com a média das sessões iniciais. Recomenda-se investigação clínica dos possíveis fatores associados — fadiga, mudanças no ambiente terapêutico, sobrecarga cognitiva ou emocional — bem como avaliar se o nível de dificuldade das últimas atividades excedeu a ZDP atual, gerando frustração e resistência às tarefas propostas.`,
+        corpo: `Curva de aprendizagem DESCENDENTE (${diferenca.toFixed(1)} pontos) no período. Recomenda-se investigar possíveis causas, como fadiga ou mudanças no nível de dificuldade das atividades.`,
       };
     }
 
     return {
       titulo,
       corpo:
-        'O aprendente apresenta ESTABILIDADE (plateau) na curva de aprendizagem ao comparar a média das sessões mais recentes com a média das sessões iniciais. A complexidade das tarefas tem sido mantida e o desempenho responde de maneira constante, o que pode indicar tanto uma fase de consolidação de habilidades quanto a necessidade de reavaliar o nível de desafio para reengajar o processo de progressão.',
+        'Desempenho ESTÁVEL no período, sem variação relevante entre o início e o fim das sessões.',
     };
   }
 
@@ -293,21 +293,20 @@ ${secoes.map((secao, i) => `${i + 1}. [${secao.titulo}] ${secao.corpo}`).join('\
       return {
         titulo,
         corpo:
-          'Ainda não há sessões concluídas com atividades registradas para calcular a precisão média e inferir sobre o funcionamento executivo do aprendente.',
+          'Ainda não há sessões registradas para calcular a precisão média.',
       };
     }
 
-    let corpo = `A média de acertos (precisão) no período foi de ${mediaPrecisao}%. `;
+    let corpo = `Média de acertos no período: ${mediaPrecisao}%. `;
 
     if (mediaPrecisao >= 80) {
-      corpo +=
-        'Índice compatível com domínio consolidado das competências avaliadas, refletindo bom desempenho de atenção sustentada e controle inibitório frente às tarefas propostas. Sugere-se prontidão para progressão de nível de dificuldade.';
+      corpo += 'Índice alto, indicando bom domínio das atividades propostas.';
     } else if (mediaPrecisao >= 60) {
       corpo +=
-        'Índice dentro do esperado para um processo típico de aquisição de habilidades. Os erros pontuais observados podem refletir oscilações naturais da atenção sustentada ou da memória de trabalho, esperadas neste estágio do desenvolvimento das competências trabalhadas.';
+        'Índice dentro do esperado, com erros pontuais típicos do processo de aprendizagem.';
     } else {
       corpo +=
-        'Índice abaixo de 60%, sugerindo possível sobrecarga das funções executivas (atenção sustentada, controle inibitório e/ou memória de trabalho) frente à demanda da tarefa. Recomenda-se avaliação qualitativa mais aprofundada dessas funções pelo profissional responsável e revisão das estratégias de mediação/andaime (scaffolding) utilizadas.';
+        'Índice abaixo do esperado; recomenda-se revisar as estratégias utilizadas nas atividades.';
     }
 
     return { titulo, corpo };
@@ -328,17 +327,16 @@ ${secoes.map((secao, i) => `${i + 1}. [${secao.titulo}] ${secao.corpo}`).join('\
       };
     }
 
-    let corpo = `De ${taxaFrequencia.totalAgendadas} sessões agendadas, ${taxaFrequencia.totalFaltas} tiveram registro de falta, resultando em uma taxa de frequência de ${taxaFrequencia.taxaFrequencia}% (absenteísmo de ${taxaFrequencia.taxaAbsenteismo}%). `;
+    let corpo = `De ${taxaFrequencia.totalAgendadas} sessões agendadas, ${taxaFrequencia.totalFaltas} tiveram falta (frequência de ${taxaFrequencia.taxaFrequencia}%, absenteísmo de ${taxaFrequencia.taxaAbsenteismo}%). `;
 
     if (taxaFrequencia.taxaAbsenteismo >= 30) {
       corpo +=
-        'A taxa de faltas é ALTA e compromete a adesão terapêutica e a consistência necessária para a consolidação dos ganhos neuropsicológicos observados, independentemente do desempenho nas atividades realizadas. Há risco de descontinuidade do PEI; recomenda-se contato com a família/rede de apoio para investigar barreiras de acesso ou de engajamento.';
+        'Taxa de faltas ALTA; recomenda-se contato com a família/rede de apoio para entender as causas.';
     } else if (taxaFrequencia.taxaAbsenteismo >= 10) {
       corpo +=
-        'A taxa de faltas está em nível MODERADO. Oscilações pontuais de frequência tendem a ter impacto cumulativo sobre a manutenção dos ganhos terapêuticos, valendo monitorar a assiduidade nas próximas sessões para evitar impacto na continuidade do PEI.';
+        'Taxa de faltas MODERADA; vale acompanhar a assiduidade nas próximas sessões.';
     } else {
-      corpo +=
-        'O aprendente mantém um BOM nível de adesão terapêutica e assiduidade às sessões agendadas, o que constitui fator protetivo para a continuidade e consolidação do plano de intervenção.';
+      corpo += 'BOA frequência e adesão às sessões agendadas.';
     }
 
     return { titulo, corpo };
@@ -355,8 +353,7 @@ ${secoes.map((secao, i) => `${i + 1}. [${secao.titulo}] ${secao.corpo}`).join('\
     if (totalSessoes === 0 || taxaFrequencia.totalAgendadas === 0) {
       return {
         titulo,
-        corpo:
-          'Não há dados suficientes registrados até o momento para compor uma síntese clínica. Recomenda-se retomar esta análise após o registro de novas sessões.',
+        corpo: 'Não há dados suficientes para compor uma síntese.',
       };
     }
 
@@ -370,32 +367,32 @@ ${secoes.map((secao, i) => `${i + 1}. [${secao.titulo}] ${secao.corpo}`).join('\
     }
 
     if (mediaPrecisao >= 80) {
-      pontosPositivos.push('domínio consolidado das competências avaliadas');
+      pontosPositivos.push('boa precisão');
     } else if (mediaPrecisao < 60) {
-      pontosAtencao.push('indícios de sobrecarga das funções executivas');
+      pontosAtencao.push('precisão baixa');
     }
 
     if (taxaFrequencia.taxaAbsenteismo < 10) {
-      pontosPositivos.push('boa adesão terapêutica');
+      pontosPositivos.push('boa frequência');
     } else if (taxaFrequencia.taxaAbsenteismo >= 30) {
-      pontosAtencao.push('baixa adesão terapêutica (alto absenteísmo)');
+      pontosAtencao.push('faltas altas');
     }
 
     let corpo = '';
 
     if (pontosPositivos.length > 0) {
-      corpo += `Pontos positivos observados: ${pontosPositivos.join('; ')}. `;
+      corpo += `Pontos positivos: ${pontosPositivos.join('; ')}. `;
     }
     if (pontosAtencao.length > 0) {
-      corpo += `Pontos que merecem atenção clínica: ${pontosAtencao.join('; ')}. `;
+      corpo += `Pontos de atenção: ${pontosAtencao.join('; ')}. `;
     }
     if (pontosPositivos.length === 0 && pontosAtencao.length === 0) {
       corpo +=
-        'O quadro geral encontra-se estável, sem indicadores quantitativos que sugiram necessidade de ajustes imediatos no plano de intervenção. ';
+        'Quadro estável, sem indicadores que sugiram ajustes imediatos. ';
     }
 
     corpo +=
-      'Esta síntese é gerada automaticamente a partir de indicadores quantitativos e NÃO substitui a avaliação clínica do profissional responsável, que deve validar, contextualizar e complementar as observações acima antes de qualquer encaminhamento ao PEI ou à família/rede de apoio.';
+      'Síntese gerada automaticamente; deve ser validada pelo profissional responsável.';
 
     return { titulo, corpo };
   }
