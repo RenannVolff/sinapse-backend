@@ -182,7 +182,10 @@ export class RelatoriosService {
     atendimentos: { dataAtendimento: Date; status: StatusAtendimento }[],
     agrupamento: AgrupamentoFrequencia,
   ) {
-    const mapa = new Map<string, Record<(typeof STATUS_AGRUPADOS)[number], number>>();
+    const mapa = new Map<
+      string,
+      Record<(typeof STATUS_AGRUPADOS)[number], number>
+    >();
 
     for (const at of atendimentos) {
       const chave = this.obterChavePeriodo(at.dataAtendimento, agrupamento);

@@ -6,11 +6,25 @@ export const AVISO_REVISAO_PADRAO =
   'Este relatório é um rascunho gerado automaticamente e deve ser revisado por um profissional antes do envio.';
 
 const GEMINI_TIMEOUT_MS = 10_000;
-const GEMINI_MODEL = 'gemini-1.5-flash';
+// O relatório de atendimento pede múltiplos parágrafos correlacionando
+// métricas e observações qualitativas — gera mais tokens, então damos uma
+// folga maior antes de cair no fallback heurístico.
+const RESUMO_ATENDIMENTO_TIMEOUT_MS = 20_000;
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 
 interface SecaoRelatorio {
   titulo: string;
   corpo: string;
+}
+
+// Dados de uma sessão já anonimizados (sem nome/responsável/contato) para
+// grounding do relatório qualitativo — ver AprendentesService.gerarRelatorioInteligente.
+export interface SessaoQualitativa {
+  numero: number;
+  score: number;
+  nivelDificuldadeMedio: number;
+  atividades: string[];
+  observacoes: string[];
 }
 
 export interface RelatorioTextual {
@@ -76,24 +90,116 @@ export class IaService {
   private async chamarGemini(
     relatorioHeuristica: RelatorioTextual,
   ): Promise<SecaoRelatorio[]> {
+    const texto = await this.chamarModeloGemini(
+      this.montarPromptIA(relatorioHeuristica),
+      { responseMimeType: 'application/json' },
+    );
+    return this.parseSecoesIA(texto, relatorioHeuristica.secoes.length);
+  }
+
+  // Enriquece o resumo textual do relatório de atendimento (usado pela tela
+  // de Aprendentes) via Gemini, a partir de métricas já calculadas e
+  // anonimizadas — sem nome, responsável ou qualquer dado de identificação.
+  // Qualquer falha (sem API key, timeout, rede, resposta vazia) retorna null
+  // para o chamador cair no texto heurístico já calculado.
+  async enriquecerResumoAtendimento(dados: {
+    numSessoes: number;
+    mediaGeral: number;
+    tendencia: string;
+    avaliacao: string;
+    sessoes: SessaoQualitativa[];
+  }): Promise<string | null> {
+    if (!process.env.GEMINI_API_KEY) {
+      return null;
+    }
+
+    try {
+      const texto = await this.chamarModeloGemini(
+        this.montarPromptResumoAtendimento(dados),
+        undefined,
+        RESUMO_ATENDIMENTO_TIMEOUT_MS,
+      );
+      const textoLimpo = texto.trim();
+      if (!textoLimpo) {
+        throw new Error('Resposta vazia da IA');
+      }
+      return textoLimpo;
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao enriquecer resumo de atendimento via IA, usando heurística como fallback: ${(error as Error).message}`,
+      );
+      return null;
+    }
+  }
+
+  private montarPromptResumoAtendimento(dados: {
+    numSessoes: number;
+    mediaGeral: number;
+    tendencia: string;
+    avaliacao: string;
+    sessoes: SessaoQualitativa[];
+  }): string {
+    const detalhamentoSessoes = dados.sessoes
+      .map((s) => {
+        const atividades =
+          s.atividades.length > 0
+            ? s.atividades.join(', ')
+            : 'nenhuma registrada';
+        const observacoes =
+          s.observacoes.length > 0
+            ? ` Observações do terapeuta: ${s.observacoes.join(' | ')}.`
+            : '';
+        return `Sessão ${s.numero}: score ${s.score}%, nível de dificuldade médio ${s.nivelDificuldadeMedio}, atividades: ${atividades}.${observacoes}`;
+      })
+      .join('\n');
+
+    return `Você é um assistente que ajuda terapeutas neuro-psicopedagógicos a redigir relatórios clínicos profissionais.
+
+Com base EXCLUSIVAMENTE nos dados anonimizados abaixo (métricas numéricas e observações registradas pelo terapeuta durante as sessões), escreva um relatório em múltiplos parágrafos corridos — não frases soltas, não listas, não marcadores — organizado nesta ordem de tópicos (um ou mais parágrafos por tópico, sem escrever o nome do tópico como título):
+1. Tendência geral de desempenho ao longo do período.
+2. Precisão/desempenho nas atividades propostas.
+3. Observações qualitativas registradas nas sessões, relacionando-as com os números quando fizer sentido (ex: uma queda de score que coincide com uma observação de cansaço, agitação ou dificuldade deve ser mencionada como possível causa).
+4. Recomendação para a continuidade do acompanhamento.
+
+Regras obrigatórias:
+- Não invente nenhum dado, número, observação ou fato que não esteja explicitado abaixo.
+- Você não recebeu nome, responsáveis ou qualquer dado de identificação pessoal — não mencione nada disso; refira-se genericamente a "o aprendente".
+- Use linguagem técnica pedagógica/clínica, adequada para constar em um relatório profissional revisado por um terapeuta.
+- Se não houver observações qualitativas suficientes, foque nos tópicos numéricos disponíveis, sem inventar conteúdo qualitativo.
+- Responda APENAS com o texto do relatório (os parágrafos corridos), sem markdown, sem títulos de seção, sem texto fora dos parágrafos.
+
+Métricas gerais do período (dados anonimizados):
+- Sessões com pontuação válida: ${dados.numSessoes}
+- Média global de desempenho (%): ${dados.mediaGeral}
+- Tendência observada: ${dados.tendencia}
+- Avaliação qualitativa geral: ${dados.avaliacao}
+
+Detalhamento por sessão (dados anonimizados):
+${detalhamentoSessoes}`;
+  }
+
+  // Plumbing de baixo nível compartilhado: cria o client, aplica o timeout
+  // via AbortController e devolve o texto bruto da resposta.
+  private async chamarModeloGemini(
+    prompt: string,
+    generationConfig?: Record<string, unknown>,
+    timeoutMs: number = GEMINI_TIMEOUT_MS,
+  ): Promise<string> {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
     const model = genAI.getGenerativeModel({
       model: GEMINI_MODEL,
-      generationConfig: { responseMimeType: 'application/json' },
+      generationConfig,
     });
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const result = await model.generateContent(
-        this.montarPromptIA(relatorioHeuristica),
-        { signal: controller.signal, timeout: GEMINI_TIMEOUT_MS },
-      );
-      return this.parseSecoesIA(
-        result.response.text(),
-        relatorioHeuristica.secoes.length,
-      );
+      const result = await model.generateContent(prompt, {
+        signal: controller.signal,
+        timeout: timeoutMs,
+      });
+      return result.response.text();
     } finally {
       clearTimeout(timeoutId);
     }
