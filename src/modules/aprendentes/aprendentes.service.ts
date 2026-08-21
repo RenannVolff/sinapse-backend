@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
+import { IaService, SessaoQualitativa } from '../ia/ia.service';
 
 @Injectable()
 export class AprendentesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private iaService: IaService,
+  ) {}
 
   create(data: CreateAprendenteDto, usuarioId: string) {
     return this.prisma.aprendente.create({
@@ -127,6 +131,40 @@ export class AprendentesService {
 
     const dadosValidos = dadosGrafico.filter((d) => d.score > 0);
 
+    // Dados qualitativos por sessão (número, não data — e sem PII) para
+    // enriquecer o resumoIa via Gemini: observações do atendimento, de cada
+    // atividade e de cada item de checklist, descartando vazias/nulas.
+    const sessoesQualitativas: SessaoQualitativa[] = sessoes.map(
+      (sessao, index) => {
+        const niveis = sessao.atividades.map((a) => a.nivelDificuldade);
+        const nivelDificuldadeMedio =
+          niveis.length > 0
+            ? Math.round(
+                (niveis.reduce((acc, n) => acc + n, 0) / niveis.length) * 10,
+              ) / 10
+            : 0;
+
+        const observacoesBrutas = [
+          sessao.observacoes,
+          ...sessao.atividades.map((a) => a.observacao),
+          ...sessao.atividades.flatMap((a) =>
+            a.itensChecklist.map((i) => i.observacao),
+          ),
+        ];
+        const observacoes = observacoesBrutas
+          .filter((obs): obs is string => !!obs && obs.trim().length > 0)
+          .map((obs) => obs.trim());
+
+        return {
+          numero: index + 1,
+          score: dadosGrafico[index].score,
+          nivelDificuldadeMedio,
+          atividades: sessao.atividades.map((a) => a.titulo),
+          observacoes,
+        };
+      },
+    );
+
     let resumoIa = '';
 
     if (dadosValidos.length > 0) {
@@ -158,6 +196,20 @@ export class AprendentesService {
           'necessidade de maior intervenção e adaptação dos estímulos';
 
       resumoIa = `Análise Sistêmica Automática: No período selecionado, o aprendente ${nomeAprendente} realizou atividades avaliativas com pontuação válida em ${numSessoes} sessão(ões). A média global de desempenho cognitivo-matemático foi de ${mediaGeral}%, indicando uma ${avaliacao}. Ao observar o histórico, nota-se uma tendência de ${tendencia}. O sistema recomenda a continuidade dos atendimentos ajustando o nível de dificuldade com base nesta métrica.`;
+
+      // Enriquecer o resumo via Gemini a partir das mesmas métricas já
+      // calculadas acima (sem nome/PII); em qualquer falha, mantém a
+      // heurística acima como está.
+      const resumoViaIa = await this.iaService.enriquecerResumoAtendimento({
+        numSessoes,
+        mediaGeral,
+        tendencia,
+        avaliacao,
+        sessoes: sessoesQualitativas,
+      });
+      if (resumoViaIa) {
+        resumoIa = resumoViaIa;
+      }
     } else {
       resumoIa =
         'As sessões encontradas não possuem atividades com checklists marcados para gerar o laudo matemático.';

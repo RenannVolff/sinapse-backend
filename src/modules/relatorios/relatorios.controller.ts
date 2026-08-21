@@ -1,4 +1,10 @@
-import { BadRequestException, Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { RelatoriosService } from './relatorios.service';
 import type { AgrupamentoFrequencia } from './relatorios.service';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';

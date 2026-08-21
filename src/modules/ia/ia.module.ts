@@ -7,5 +7,6 @@ import { RelatoriosModule } from '../relatorios/relatorios.module'; // Importar 
   imports: [RelatoriosModule], // Permite usar o RelatoriosService dentro da IA
   controllers: [IaController],
   providers: [IaService],
+  exports: [IaService], // Permite que outros módulos usem este serviço
 })
 export class IaModule {}

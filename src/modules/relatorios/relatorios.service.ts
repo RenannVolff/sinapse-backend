@@ -88,6 +88,19 @@ export class RelatoriosService {
     }
   }
 
+  // Dados de cadastro do aprendente usados na identificação do relatório
+  // (fora das métricas anonimizadas — nunca deve ser encaminhado à IA externa)
+  async getIdentificacaoAprendente(aprendenteId: string, usuarioId: string) {
+    const aprendente = await this.prisma.aprendente.findFirst({
+      where: { id: aprendenteId, usuarioId, deletedAt: null },
+      select: { nomeCompleto: true, dataNascimento: true, criadoEm: true },
+    });
+    if (!aprendente) {
+      throw new NotFoundException('Aprendente não encontrado.');
+    }
+    return aprendente;
+  }
+
   // Taxa de frequência/absenteísmo: total de sessões agendadas vs. quantas foram FALTA
   async getTaxaFrequencia(aprendenteId: string, usuarioId: string) {
     await this.validarAprendente(aprendenteId, usuarioId);
@@ -169,7 +182,10 @@ export class RelatoriosService {
     atendimentos: { dataAtendimento: Date; status: StatusAtendimento }[],
     agrupamento: AgrupamentoFrequencia,
   ) {
-    const mapa = new Map<string, Record<(typeof STATUS_AGRUPADOS)[number], number>>();
+    const mapa = new Map<
+      string,
+      Record<(typeof STATUS_AGRUPADOS)[number], number>
+    >();
 
     for (const at of atendimentos) {
       const chave = this.obterChavePeriodo(at.dataAtendimento, agrupamento);

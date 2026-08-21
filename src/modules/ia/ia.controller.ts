@@ -19,6 +19,6 @@ export class IaController {
     @Param('aprendenteId') id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.service.gerarRelatorioTextual(id, user.id);
+    return this.service.gerarRelatorioComIA(id, user.id);
   }
 }
