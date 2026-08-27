@@ -32,6 +32,7 @@ model Aprendente {
   usuarioId      String
   usuario        Usuario       @relation(fields: [usuarioId], references: [id])
   atendimentos   Atendimento[]
+  peis           PEI[]
 
   @@map("aprendentes")
 }
@@ -60,6 +61,24 @@ model Atendimento {
 
   @@index([aprendenteId, dataAtendimento])
   @@map("atendimentos")
+}
+
+// --- TABELA DE PEI (PLANO EDUCACIONAL INDIVIDUALIZADO) ---
+model PEI {
+  id               String     @id @default(uuid())
+  aprendenteId     String
+  aprendente       Aprendente @relation(fields: [aprendenteId], references: [id], onDelete: Cascade)
+  dificuldades     String     @db.Text
+  objetivos        String     @db.Text
+  estrategias      String     @db.Text
+  dataInicio       DateTime
+  dataFim          DateTime?
+  criadoEm         DateTime   @default(now())
+  deletedAt        DateTime?
+  templateOrigemId String?
+
+  @@index([aprendenteId])
+  @@map("peis")
 }
 
 // --- TABELA DE ATIVIDADES (GRÁFICO INTELIGENTE) ---
