@@ -10,12 +10,13 @@ datasource db {
 
 // --- TABELA DE USUÁRIOS (PROFISSIONAIS/TERAPEUTAS) ---
 model Usuario {
-  id          String        @id @default(uuid())
-  nome        String
-  email       String        @unique
-  senhaHash   String
-  criadoEm    DateTime      @default(now())
-  aprendentes Aprendente[]
+  id           String        @id @default(uuid())
+  nome         String
+  email        String        @unique
+  senhaHash    String
+  criadoEm     DateTime      @default(now())
+  aprendentes  Aprendente[]
+  peiTemplates PeiTemplate[]
 
   @@map("usuarios")
 }
@@ -47,15 +48,16 @@ enum StatusAtendimento {
   CANCELADO
   FALTA
 }
+
 model Atendimento {
-  id              String      @id @default(uuid())
+  id              String            @id @default(uuid())
   aprendenteId    String
-  aprendente      Aprendente  @relation(fields: [aprendenteId], references: [id], onDelete: Cascade)
+  aprendente      Aprendente        @relation(fields: [aprendenteId], references: [id], onDelete: Cascade)
   dataAtendimento DateTime
   tituloSessao    String
-  observacoes     String?     // Texto longo para observações gerais
+  observacoes     String? // Texto longo para observações gerais
   status          StatusAtendimento @default(AGENDADO)
-  concluido       Boolean     @default(false)
+  concluido       Boolean           @default(false)
   deletedAt       DateTime?
   atividades      Atividade[]
 
@@ -65,39 +67,57 @@ model Atendimento {
 
 // --- TABELA DE PEI (PLANO EDUCACIONAL INDIVIDUALIZADO) ---
 model PEI {
-  id               String     @id @default(uuid())
+  id               String       @id @default(uuid())
   aprendenteId     String
-  aprendente       Aprendente @relation(fields: [aprendenteId], references: [id], onDelete: Cascade)
-  dificuldades     String     @db.Text
-  objetivos        String     @db.Text
-  estrategias      String     @db.Text
+  aprendente       Aprendente   @relation(fields: [aprendenteId], references: [id], onDelete: Cascade)
+  dificuldades     String       @db.Text
+  objetivos        String       @db.Text
+  estrategias      String       @db.Text
   dataInicio       DateTime
   dataFim          DateTime?
-  criadoEm         DateTime   @default(now())
+  criadoEm         DateTime     @default(now())
   deletedAt        DateTime?
   templateOrigemId String?
+  templateOrigem   PeiTemplate? @relation(fields: [templateOrigemId], references: [id], onDelete: SetNull)
 
   @@index([aprendenteId])
   @@map("peis")
 }
 
+// --- TABELA DE PEI TEMPLATE (MOLDE REUTILIZÁVEL) ---
+model PeiTemplate {
+  id             String    @id @default(uuid())
+  nome           String
+  dificuldades   String    @db.Text
+  objetivos      String    @db.Text
+  estrategias    String    @db.Text
+  usuarioId      String
+  usuario        Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  criadoEm       DateTime  @default(now())
+  deletedAt      DateTime?
+  peisOriginados PEI[]
+
+  @@index([usuarioId])
+  @@map("pei_templates")
+}
+
 // --- TABELA DE ATIVIDADES (GRÁFICO INTELIGENTE) ---
 model Atividade {
-  id               String          @id @default(uuid())
-  atendimentoId    String
-  atendimento      Atendimento     @relation(fields: [atendimentoId], references: [id], onDelete: Cascade)
-  
-  titulo           String          // Ex: "Coordenação Motora - Pinça"
-  nivelDificuldade Int             @default(1) 
-  
+  id            String      @id @default(uuid())
+  atendimentoId String
+  atendimento   Atendimento @relation(fields: [atendimentoId], references: [id], onDelete: Cascade)
+
+  titulo           String // Ex: "Coordenação Motora - Pinça"
+  nivelDificuldade Int    @default(1)
+
   // Observação Geral (A caixa de texto no final das 5 tentativas)
-  observacao       String?         @db.Text 
+  observacao String? @db.Text
 
   // Dados calculados (Mantemos a lógica da ponderada)
-  percentualAcerto Float           @default(0) 
-  scorePonderado   Float           @default(0) 
+  percentualAcerto Float @default(0)
+  scorePonderado   Float @default(0)
 
-  itensChecklist   ItemChecklist[]
+  itensChecklist ItemChecklist[]
 
   @@map("atividades")
 }
@@ -109,7 +129,7 @@ model ItemChecklist {
   atividade   Atividade @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
   descricao   String
   realizado   Boolean   @default(false)
-  observacao  String?   // Observação específica do item para detalhes adicionais da atividade
+  observacao  String? // Observação específica do item para detalhes adicionais da atividade
 
   @@map("itens_checklist")
 }
