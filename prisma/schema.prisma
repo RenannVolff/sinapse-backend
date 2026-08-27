@@ -23,17 +23,18 @@ model Usuario {
 
 // --- TABELA DE APRENDENTES ---
 model Aprendente {
-  id             String        @id @default(uuid())
+  id             String          @id @default(uuid())
   nomeCompleto   String
   dataNascimento DateTime
   responsavel    String?
   contato        String?
-  criadoEm       DateTime      @default(now())
+  criadoEm       DateTime        @default(now())
   deletedAt      DateTime?
   usuarioId      String
-  usuario        Usuario       @relation(fields: [usuarioId], references: [id])
+  usuario        Usuario         @relation(fields: [usuarioId], references: [id])
   atendimentos   Atendimento[]
   peis           PEI[]
+  faseAtual      FaseAtendimento @default(LINHA_BASE)
 
   @@map("aprendentes")
 }
@@ -49,6 +50,13 @@ enum StatusAtendimento {
   FALTA
 }
 
+// Fase do desenho experimental (linha de base "A" x intervenção "B"),
+// controlada explicitamente pelo terapeuta por aprendente (Aprendente.faseAtual).
+enum FaseAtendimento {
+  LINHA_BASE
+  INTERVENCAO
+}
+
 model Atendimento {
   id              String            @id @default(uuid())
   aprendenteId    String
@@ -60,6 +68,7 @@ model Atendimento {
   concluido       Boolean           @default(false)
   deletedAt       DateTime?
   atividades      Atividade[]
+  fase            FaseAtendimento   @default(LINHA_BASE)
 
   @@index([aprendenteId, dataAtendimento])
   @@map("atendimentos")

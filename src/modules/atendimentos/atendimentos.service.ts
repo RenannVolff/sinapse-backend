@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Prisma, StatusAtendimento } from '@prisma/client';
+import { Prisma, StatusAtendimento, FaseAtendimento } from '@prisma/client';
 import {
   IsString,
   IsNotEmpty,
@@ -29,6 +29,11 @@ export class CreateAtendimentoDto {
   @IsOptional()
   @IsString()
   observacoes?: string;
+
+  // Sobrescrita pontual da fase; se omitido, usa aprendente.faseAtual no momento da criação.
+  @IsOptional()
+  @IsEnum(FaseAtendimento)
+  fase?: FaseAtendimento;
 }
 
 export class UpdateAtendimentoDto {
@@ -71,6 +76,7 @@ export class AtendimentosService {
           observacoes: data.observacoes,
           status: StatusAtendimento.AGENDADO,
           concluido: false,
+          fase: data.fase ?? aprendente.faseAtual,
         },
       });
     } catch (error) {

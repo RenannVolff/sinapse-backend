@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   Query,
+  Patch,
   Delete,
   HttpCode,
   HttpStatus,
@@ -12,6 +13,7 @@ import {
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AprendentesService } from './aprendentes.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
+import { UpdateFaseAprendenteDto } from './dto/update-fase-aprendente.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
@@ -39,6 +41,23 @@ export class AprendentesController {
   @ApiOperation({ summary: 'Busca os detalhes e histórico de um aprendente' })
   findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.aprendentesService.findOne(id, user.id);
+  }
+
+  @Patch(':id/fase')
+  @ApiOperation({
+    summary:
+      'Atualiza explicitamente a fase (linha de base/intervenção) do aprendente',
+  })
+  atualizarFase(
+    @Param('id') id: string,
+    @Body() updateFaseDto: UpdateFaseAprendenteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.aprendentesService.atualizarFase(
+      id,
+      updateFaseDto.fase,
+      user.id,
+    );
   }
 
   @Delete(':id')

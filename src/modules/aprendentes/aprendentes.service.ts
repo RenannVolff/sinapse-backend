@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
 import { IaService, SessaoQualitativa } from '../ia/ia.service';
+import { FaseAtendimento } from '@prisma/client';
 
 @Injectable()
 export class AprendentesService {
@@ -42,6 +43,18 @@ export class AprendentesService {
 
     if (!aprendente) throw new NotFoundException('Aprendente não encontrado.');
     return aprendente;
+  }
+
+  async atualizarFase(id: string, fase: FaseAtendimento, usuarioId: string) {
+    const aprendente = await this.prisma.aprendente.findFirst({
+      where: { id, usuarioId, deletedAt: null },
+    });
+    if (!aprendente) throw new NotFoundException('Aprendente não encontrado.');
+
+    return this.prisma.aprendente.update({
+      where: { id },
+      data: { faseAtual: fase },
+    });
   }
 
   async remove(id: string, usuarioId: string) {
