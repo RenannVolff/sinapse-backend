@@ -13,6 +13,8 @@ import { IaModule } from './modules/ia/ia.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
+import { PeiModule } from './modules/pei/pei.module';
+import { PeiTemplateModule } from './modules/pei-templates/pei-template.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
@@ -28,6 +30,8 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     AuthModule,
     DashboardModule,
     AuditLogsModule,
+    PeiModule,
+    PeiTemplateModule,
   ],
   controllers: [AppController],
   providers: [
