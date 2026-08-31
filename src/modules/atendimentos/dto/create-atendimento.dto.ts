@@ -6,6 +6,7 @@ import {
   IsString,
   IsUUID,
 } from 'class-validator';
+import { IsDateNotInPast } from '../../../common/validators/is-date-not-in-past.validator';
 // DTO para criação de um novo atendimento
 export class CreateAtendimentoDto {
   @ApiProperty({ description: 'ID do Aprendente vinculado' })
@@ -16,6 +17,7 @@ export class CreateAtendimentoDto {
   @ApiProperty({ description: 'Data e Hora do atendimento' })
   @IsDateString()
   @IsNotEmpty()
+  @IsDateNotInPast()
   dataAtendimento!: string;
   // O título da sessão é obrigatório para facilitar a identificação do atendimento posteriormente
   @ApiProperty({ description: 'Título da Sessão' })
