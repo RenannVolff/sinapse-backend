@@ -15,6 +15,7 @@ import {
   AtendimentosService,
   CreateAtendimentoDto,
   UpdateAtendimentoDto,
+  UpdateStatusAtendimentoDto,
 } from './atendimentos.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
@@ -56,6 +57,19 @@ export class AtendimentosController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.atendimentosService.update(id, updateDto, user.id);
+  }
+
+  @Patch(':id/status')
+  atualizarStatus(
+    @Param('id') id: string,
+    @Body() updateStatusDto: UpdateStatusAtendimentoDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.atendimentosService.atualizarStatus(
+      id,
+      updateStatusDto.status,
+      user.id,
+    );
   }
 
   @Delete(':id')

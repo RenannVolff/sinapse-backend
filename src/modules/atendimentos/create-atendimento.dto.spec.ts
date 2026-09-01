@@ -1,6 +1,6 @@
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import { CreateAtendimentoDto } from './create-atendimento.dto';
+import { CreateAtendimentoDto } from './atendimentos.service';
 
 describe('CreateAtendimentoDto - dataAtendimento não pode ser passado', () => {
   const base = {

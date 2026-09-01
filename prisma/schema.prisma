@@ -44,6 +44,8 @@ model Aprendente {
 // Definição dos Status possíveis
 enum StatusAtendimento {
   AGENDADO
+  AGUARDANDO_CONFIRMACAO
+  CONFIRMADO
   EM_ANDAMENTO
   CONCLUIDO
   CANCELADO
@@ -62,6 +64,7 @@ model Atendimento {
   aprendenteId    String
   aprendente      Aprendente        @relation(fields: [aprendenteId], references: [id], onDelete: Cascade)
   dataAtendimento DateTime
+  duracaoMinutos  Int               @default(60)
   tituloSessao    String
   observacoes     String? // Texto longo para observações gerais
   status          StatusAtendimento @default(AGENDADO)
