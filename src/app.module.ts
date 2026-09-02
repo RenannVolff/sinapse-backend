@@ -15,6 +15,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { PeiModule } from './modules/pei/pei.module';
 import { PeiTemplateModule } from './modules/pei-templates/pei-template.module';
+import { TarefasModule } from './modules/tarefas/tarefas.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
@@ -32,6 +33,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     AuditLogsModule,
     PeiModule,
     PeiTemplateModule,
+    TarefasModule,
   ],
   controllers: [AppController],
   providers: [

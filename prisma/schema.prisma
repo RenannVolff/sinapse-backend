@@ -17,6 +17,7 @@ model Usuario {
   criadoEm     DateTime      @default(now())
   aprendentes  Aprendente[]
   peiTemplates PeiTemplate[]
+  tarefas      Tarefa[]
 
   @@map("usuarios")
 }
@@ -144,6 +145,21 @@ model ItemChecklist {
   observacao  String? // Observação específica do item para detalhes adicionais da atividade
 
   @@map("itens_checklist")
+}
+
+// --- TABELA DE TAREFAS (MINHAS TAREFAS) ---
+model Tarefa {
+  id         String    @id @default(uuid())
+  usuarioId  String
+  usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  texto      String
+  notas      String?   @db.Text
+  concluida  Boolean   @default(false)
+  criadoEm   DateTime  @default(now())
+  deletedAt  DateTime?
+
+  @@index([usuarioId])
+  @@map("tarefas")
 }
 
 // --- TABELA DE TRILHA DE AUDITORIA (LGPD) ---

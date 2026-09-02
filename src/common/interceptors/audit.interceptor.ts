@@ -33,6 +33,7 @@ const AUDITED_RESOURCE_BY_CONTROLLER: Record<string, string> = {
   IaController: 'IA',
   PeiController: 'PEI',
   PeiTemplateController: 'PEI_TEMPLATE',
+  TarefasController: 'TAREFA',
 };
 
 @Injectable()
