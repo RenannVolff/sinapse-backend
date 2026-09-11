@@ -2,7 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
 import { IaService, SessaoQualitativa } from '../ia/ia.service';
-import { FaseAtendimento } from '@prisma/client';
+import { FaseAtendimento, Prisma } from '@prisma/client';
+
+type SessaoComAtividades = Prisma.AtendimentoGetPayload<{
+  include: { atividades: { include: { itensChecklist: true } } };
+}>;
 
 @Injectable()
 export class AprendentesService {
@@ -76,6 +80,26 @@ export class AprendentesService {
     ]);
   }
 
+  // Calcula o score (0-100) de uma sessão a partir das atividades e
+  // itens de checklist, ponderado pelo nível de dificuldade de cada
+  // atividade. Puramente matemático — sem chamadas de IA.
+  private calcularScoreSessao(sessao: SessaoComAtividades): number {
+    let scoreTotalSessao = 0;
+    let pesoTotalSessao = 0;
+
+    sessao.atividades.forEach((ativ) => {
+      const acertos = ativ.itensChecklist.filter((i) => i.realizado).length;
+      const scoreAtividade = (acertos / 5) * 100;
+
+      scoreTotalSessao += scoreAtividade * ativ.nivelDificuldade;
+      pesoTotalSessao += ativ.nivelDificuldade;
+    });
+
+    return pesoTotalSessao > 0
+      ? Math.round(scoreTotalSessao / pesoTotalSessao)
+      : 0;
+  }
+
   // --- RELATÓRIO AUTÔNOMO (HEURÍSTICO) ---
   async gerarRelatorioInteligente(
     aprendenteId: string,
@@ -116,21 +140,7 @@ export class AprendentesService {
 
     // 1. Calcula os gráficos matemáticos
     const dadosGrafico = sessoes.map((sessao) => {
-      let scoreTotalSessao = 0;
-      let pesoTotalSessao = 0;
-
-      sessao.atividades.forEach((ativ) => {
-        const acertos = ativ.itensChecklist.filter((i) => i.realizado).length;
-        const scoreAtividade = (acertos / 5) * 100;
-
-        scoreTotalSessao += scoreAtividade * ativ.nivelDificuldade;
-        pesoTotalSessao += ativ.nivelDificuldade;
-      });
-
-      const mediaSessao =
-        pesoTotalSessao > 0
-          ? Math.round(scoreTotalSessao / pesoTotalSessao)
-          : 0;
+      const mediaSessao = this.calcularScoreSessao(sessao);
 
       return {
         data: sessao.dataAtendimento.toLocaleDateString('pt-BR', {
@@ -229,5 +239,31 @@ export class AprendentesService {
     }
 
     return { resumoIa, dadosGrafico: dadosValidos };
+  }
+
+  // --- HISTÓRICO COMPLETO PARA GRÁFICOS DE ACOMPANHAMENTO (SEM IA) ---
+  // Retorna todos os atendimentos do aprendente, sem filtro de data, com
+  // score calculado matematicamente — usado para alimentar gráficos
+  // AB-ABAB, média por período e regressão linear no frontend.
+  async findGraficosAcompanhamento(aprendenteId: string, usuarioId: string) {
+    const sessoes = await this.prisma.atendimento.findMany({
+      where: {
+        aprendenteId,
+        aprendente: { usuarioId },
+        deletedAt: null,
+      },
+      orderBy: { dataAtendimento: 'asc' },
+      include: {
+        atividades: { include: { itensChecklist: true } },
+      },
+    });
+
+    return sessoes.map((sessao) => ({
+      id: sessao.id,
+      dataAtendimento: sessao.dataAtendimento.toISOString(),
+      score: this.calcularScoreSessao(sessao),
+      fase: sessao.fase,
+      status: sessao.status,
+    }));
   }
 }

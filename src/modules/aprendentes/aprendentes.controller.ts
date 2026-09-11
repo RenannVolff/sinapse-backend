@@ -96,4 +96,16 @@ export class AprendentesController {
       user.id,
     );
   }
+
+  @Get(':id/graficos-acompanhamento')
+  @ApiOperation({
+    summary:
+      'Histórico completo de desempenho (score, fase, status por sessão) para gráficos de acompanhamento — sem IA',
+  })
+  getGraficosAcompanhamento(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.aprendentesService.findGraficosAcompanhamento(id, user.id);
+  }
 }
