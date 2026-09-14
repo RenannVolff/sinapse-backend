@@ -6,10 +6,12 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { UsuariosModule } from '../usuarios/usuarios.module';
 
 @Module({
   imports: [
     PrismaModule,
+    UsuariosModule,
     JwtModule.register({
       global: true,
       secret: process.env.JWT_SECRET || 'segredo_padrao_tcc',

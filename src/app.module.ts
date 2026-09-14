@@ -17,6 +17,7 @@ import { PeiModule } from './modules/pei/pei.module';
 import { PeiTemplateModule } from './modules/pei-templates/pei-template.module';
 import { TarefasModule } from './modules/tarefas/tarefas.module';
 import { ExportacaoModule } from './modules/exportacao/exportacao.module';
+import { EmailModule } from './modules/email/email.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 
 @Module({
@@ -36,6 +37,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
     PeiTemplateModule,
     TarefasModule,
     ExportacaoModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [

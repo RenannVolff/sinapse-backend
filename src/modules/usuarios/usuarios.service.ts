@@ -7,12 +7,40 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
+import { EmailService } from '../email/email.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 
+const TOKEN_VERIFICACAO_VALIDADE_MS = 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class UsuariosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
+
+  // Gera um token aleatório, guarda só o HASH (nunca o valor puro) com prazo
+  // de 24h, e envia o token em texto puro por e-mail — quem tem só o banco
+  // não consegue forjar um link de verificação válido.
+  async gerarEEnviarTokenVerificacao(
+    usuarioId: string,
+    email: string,
+  ): Promise<void> {
+    const tokenPuro = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(tokenPuro).digest('hex');
+
+    await this.prisma.usuario.update({
+      where: { id: usuarioId },
+      data: {
+        tokenVerificacao: tokenHash,
+        tokenVerificacaoExpiraEm: new Date(Date.now() + TOKEN_VERIFICACAO_VALIDADE_MS),
+      },
+    });
+
+    await this.emailService.enviarEmailVerificacao(email, tokenPuro);
+  }
 
   async create(data: CreateUsuarioDto) {
     //
@@ -30,7 +58,7 @@ export class UsuariosService {
 
     try {
       //
-      return await this.prisma.usuario.create({
+      const usuario = await this.prisma.usuario.create({
         data: {
           nome: data.nome,
           email: data.email,
@@ -43,6 +71,10 @@ export class UsuariosService {
           criadoEm: true,
         },
       });
+
+      await this.gerarEEnviarTokenVerificacao(usuario.id, usuario.email);
+
+      return usuario;
     } catch (error) {
       console.error('Erro ao criar usuário:', error);
       throw new InternalServerErrorException(

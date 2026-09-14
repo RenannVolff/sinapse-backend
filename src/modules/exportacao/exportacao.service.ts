@@ -10,6 +10,7 @@ import {
   TextRun,
 } from 'docx';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AVISO_REVISAO_PADRAO } from '../ia/ia.service';
 import { ExportarDocxDto } from './dto/exportar-docx.dto';
 
 const LARGURA_MAXIMA_IMAGEM_PX = 550;
@@ -51,7 +52,7 @@ export class ExportacaoService {
             }),
             ...this.montarParagrafosResumo(dto.resumoIa),
             ...this.montarSecoesGraficos(dto.graficos),
-            this.montarParagrafoAviso(dto.avisoRevisao),
+            this.montarParagrafoAviso(dto.avisoRevisao?.trim() || AVISO_REVISAO_PADRAO),
           ],
         },
       ],

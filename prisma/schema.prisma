@@ -10,14 +10,17 @@ datasource db {
 
 // --- TABELA DE USUÁRIOS (PROFISSIONAIS/TERAPEUTAS) ---
 model Usuario {
-  id           String        @id @default(uuid())
-  nome         String
-  email        String        @unique
-  senhaHash    String
-  criadoEm     DateTime      @default(now())
-  aprendentes  Aprendente[]
-  peiTemplates PeiTemplate[]
-  tarefas      Tarefa[]
+  id                       String        @id @default(uuid())
+  nome                     String
+  email                    String        @unique
+  senhaHash                String
+  emailVerificado          Boolean       @default(false)
+  tokenVerificacao         String?
+  tokenVerificacaoExpiraEm DateTime?
+  criadoEm                 DateTime      @default(now())
+  aprendentes              Aprendente[]
+  peiTemplates             PeiTemplate[]
+  tarefas                  Tarefa[]
 
   @@map("usuarios")
 }

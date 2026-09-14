@@ -1,9 +1,10 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBase64,
   IsNotEmpty,
+  IsOptional,
   IsString,
   ValidateNested,
 } from 'class-validator';
@@ -43,8 +44,11 @@ export class ExportarDocxDto {
   @Type(() => GraficoExportacaoDto)
   graficos!: GraficoExportacaoDto[];
 
-  @ApiProperty({ description: 'Aviso padrão de revisão profissional' })
+  @ApiPropertyOptional({
+    description:
+      'Aviso de revisão profissional; se omitido ou vazio, usa AVISO_REVISAO_PADRAO',
+  })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  avisoRevisao!: string;
+  avisoRevisao?: string;
 }
