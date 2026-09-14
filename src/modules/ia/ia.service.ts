@@ -5,12 +5,59 @@ import { RelatoriosService } from '../relatorios/relatorios.service';
 export const AVISO_REVISAO_PADRAO =
   'Este relatório é um rascunho gerado automaticamente e deve ser revisado por um profissional antes do envio.';
 
-const GEMINI_TIMEOUT_MS = 10_000;
+// Orçamento TOTAL para "tentar IA antes da heurística" — não é por tentativa.
+// A cascata abaixo pode passar por vários modelos/provedores dentro desse
+// mesmo orçamento (cada tentativa usa o tempo que sobrou), então o pior caso
+// nunca ultrapassa este valor, só o distribui entre mais chances de sucesso.
+const GEMINI_TIMEOUT_MS = 15_000;
 // O relatório de atendimento pede múltiplos parágrafos correlacionando
 // métricas e observações qualitativas — gera mais tokens, então damos uma
 // folga maior antes de cair no fallback heurístico.
 const RESUMO_ATENDIMENTO_TIMEOUT_MS = 20_000;
-const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+// Não vale a pena tentar mais um modelo/provedor com menos que isso de
+// orçamento restante — não dá tempo de uma resposta real, só desperdiça um
+// round-trip de rede.
+const TEMPO_MINIMO_TENTATIVA_MS = 2_000;
+
+// Cascata de modelos Gemini, do mais leve pro mais robusto. Todos são aliases
+// "rolling" da Google (sempre apontam pra versão atual daquela categoria) em
+// vez de nomes de versão fixos — modelos pinados (ex: gemini-3.1-flash-lite)
+// já ficaram indisponíveis com 503 "high demand"/depreciados sem aviso, e
+// aliases sofrem bem menos disso. Categorias diferentes (lite/flash/pro)
+// também tendem a ter pools de capacidade separados no lado da Google, então
+// uma sobrecarga pontual numa categoria não derruba as outras.
+const GEMINI_MODELS_CASCATA = [
+  'gemini-flash-lite-latest',
+  'gemini-flash-latest',
+  'gemini-pro-latest',
+];
+
+// Camada extra, só ativa se GROQ_API_KEY estiver configurada (conta grátis em
+// console.groq.com) — cai aqui apenas se TODOS os modelos Gemini acima
+// falharem, garantindo uma segunda chance de resposta real da IA antes da
+// heurística. API compatível com o formato OpenAI, chamada via fetch nativo
+// (sem SDK novo).
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODELS_CASCATA = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+
+// Última camada antes da heurística, só ativa se OPENROUTER_API_KEY estiver
+// configurada (conta grátis em openrouter.ai/keys) — entra apenas se TODOS os
+// modelos Gemini E Groq acima falharem. Também compatível com o formato
+// OpenAI, reaproveitando o mesmo helper de baixo nível do Groq (só muda
+// endpoint/modelos). O catálogo ":free" da OpenRouter (GET
+// https://openrouter.ai/api/v1/models, público, sem precisar de chave) muda
+// com bastante frequência (mais até que os modelos "oficiais" do Gemini) e
+// vários modelos listados como ":free" na prática respondem 403/429 ou
+// travam — os 3 abaixo foram testados manualmente (chat completion real +
+// modo JSON) em 2026-09-14 e responderam rápido (<1s a ~3s) e corretamente;
+// revalide contra o catálogo/teste real antes de assumir bug de código se
+// essa camada começar a falhar.
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_MODELS_CASCATA = [
+  'nex-agi/nex-n2.5-mini:free',
+  'google/gemma-4-26b-a4b-it:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+];
 
 interface SecaoRelatorio {
   titulo: string;
@@ -54,9 +101,10 @@ export class IaService {
   // Injeção de dependência para reaproveitar os cálculos
   constructor(private relatoriosService: RelatoriosService) {}
 
-  // Enriquece o relatório heurístico via Gemini; qualquer falha (timeout, rede,
-  // rate limit, resposta mal formada) cai automaticamente para a heurística,
-  // sem quebrar a requisição do terapeuta.
+  // Enriquece o relatório heurístico via IA (cascata Gemini + Groq + OpenRouter, ver
+  // chamarIAComFallback); qualquer falha em todos os provedores/modelos
+  // (timeout, rede, rate limit, resposta mal formada) cai automaticamente
+  // para a heurística, sem quebrar a requisição do terapeuta.
   async gerarRelatorioComIA(
     aprendenteId: string,
     usuarioId: string,
@@ -66,7 +114,7 @@ export class IaService {
       usuarioId,
     );
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!this.algumProvedorIAConfigurado()) {
       return relatorioHeuristica;
     }
 
@@ -85,23 +133,24 @@ export class IaService {
     }
   }
 
-  // Chama o Gemini com timeout curto usando apenas métricas anonimizadas e o
-  // texto da heurística como grounding — nunca dados de identificação pessoal.
+  // Pede as seções em JSON via cascata de IA, usando apenas métricas
+  // anonimizadas e o texto da heurística como grounding — nunca dados de
+  // identificação pessoal.
   private async chamarGemini(
     relatorioHeuristica: RelatorioTextual,
   ): Promise<SecaoRelatorio[]> {
-    const texto = await this.chamarModeloGemini(
+    const texto = await this.chamarIAComFallback(
       this.montarPromptIA(relatorioHeuristica),
-      { responseMimeType: 'application/json' },
+      { json: true, timeoutMs: GEMINI_TIMEOUT_MS },
     );
     return this.parseSecoesIA(texto, relatorioHeuristica.secoes.length);
   }
 
   // Enriquece o resumo textual do relatório de atendimento (usado pela tela
-  // de Aprendentes) via Gemini, a partir de métricas já calculadas e
+  // de Aprendentes) via cascata de IA, a partir de métricas já calculadas e
   // anonimizadas — sem nome, responsável ou qualquer dado de identificação.
-  // Qualquer falha (sem API key, timeout, rede, resposta vazia) retorna null
-  // para o chamador cair no texto heurístico já calculado.
+  // Qualquer falha (sem nenhuma API key, timeout, rede, resposta vazia)
+  // retorna null para o chamador cair no texto heurístico já calculado.
   async enriquecerResumoAtendimento(dados: {
     numSessoes: number;
     mediaGeral: number;
@@ -109,15 +158,14 @@ export class IaService {
     avaliacao: string;
     sessoes: SessaoQualitativa[];
   }): Promise<string | null> {
-    if (!process.env.GEMINI_API_KEY) {
+    if (!this.algumProvedorIAConfigurado()) {
       return null;
     }
 
     try {
-      const texto = await this.chamarModeloGemini(
+      const texto = await this.chamarIAComFallback(
         this.montarPromptResumoAtendimento(dados),
-        undefined,
-        RESUMO_ATENDIMENTO_TIMEOUT_MS,
+        { json: false, timeoutMs: RESUMO_ATENDIMENTO_TIMEOUT_MS },
       );
       const textoLimpo = texto.trim();
       if (!textoLimpo) {
@@ -178,17 +226,108 @@ Detalhamento por sessão (dados anonimizados):
 ${detalhamentoSessoes}`;
   }
 
-  // Plumbing de baixo nível compartilhado: cria o client, aplica o timeout
-  // via AbortController e devolve o texto bruto da resposta.
-  private async chamarModeloGemini(
+  private algumProvedorIAConfigurado(): boolean {
+    return Boolean(
+      process.env.GEMINI_API_KEY ||
+        process.env.GROQ_API_KEY ||
+        process.env.OPENROUTER_API_KEY,
+    );
+  }
+
+  // Tenta a cascata Gemini e, se todos os modelos falharem, cai pra cascata
+  // Groq e depois OpenRouter (cada uma só ativa se sua respectiva API key
+  // estiver configurada) — ordem: Gemini → Groq → OpenRouter → heurística.
+  // Só propaga o erro pro chamador (que aciona a heurística) depois de
+  // esgotar todo mundo. O orçamento de tempo é total, não por tentativa: cada
+  // modelo/provedor usa o tempo que sobrou do timeoutMs original, então o
+  // pior caso nunca ultrapassa o timeout configurado.
+  private async chamarIAComFallback(
     prompt: string,
-    generationConfig?: Record<string, unknown>,
-    timeoutMs: number = GEMINI_TIMEOUT_MS,
+    opcoes: { json: boolean; timeoutMs: number },
+  ): Promise<string> {
+    const prazoFinal = Date.now() + opcoes.timeoutMs;
+    const erros: string[] = [];
+
+    const tentativas: { rotulo: string; chamar: (tempoMs: number) => Promise<string> }[] = [];
+
+    if (process.env.GEMINI_API_KEY) {
+      for (const modelo of GEMINI_MODELS_CASCATA) {
+        tentativas.push({
+          rotulo: `Gemini/${modelo}`,
+          chamar: (tempoMs) =>
+            this.chamarGeminiModelo(prompt, modelo, opcoes.json, tempoMs),
+        });
+      }
+    }
+
+    if (process.env.GROQ_API_KEY) {
+      for (const modelo of GROQ_MODELS_CASCATA) {
+        tentativas.push({
+          rotulo: `Groq/${modelo}`,
+          chamar: (tempoMs) =>
+            this.chamarApiCompativelOpenAI(
+              GROQ_API_URL,
+              process.env.GROQ_API_KEY!,
+              modelo,
+              prompt,
+              opcoes.json,
+              tempoMs,
+            ),
+        });
+      }
+    }
+
+    if (process.env.OPENROUTER_API_KEY) {
+      for (const modelo of OPENROUTER_MODELS_CASCATA) {
+        tentativas.push({
+          rotulo: `OpenRouter/${modelo}`,
+          chamar: (tempoMs) =>
+            this.chamarApiCompativelOpenAI(
+              OPENROUTER_API_URL,
+              process.env.OPENROUTER_API_KEY!,
+              modelo,
+              prompt,
+              opcoes.json,
+              tempoMs,
+            ),
+        });
+      }
+    }
+
+    for (const tentativa of tentativas) {
+      const tempoRestante = prazoFinal - Date.now();
+      if (tempoRestante < TEMPO_MINIMO_TENTATIVA_MS) {
+        break;
+      }
+
+      try {
+        return await tentativa.chamar(tempoRestante);
+      } catch (error) {
+        erros.push(`${tentativa.rotulo}: ${(error as Error).message}`);
+      }
+    }
+
+    throw new Error(
+      erros.length > 0
+        ? `Todos os provedores de IA falharam: ${erros.join(' | ')}`
+        : 'Nenhum provedor de IA configurado (defina GEMINI_API_KEY, GROQ_API_KEY e/ou OPENROUTER_API_KEY).',
+    );
+  }
+
+  // Chama um modelo Gemini específico com timeout via AbortController e
+  // devolve o texto bruto da resposta.
+  private async chamarGeminiModelo(
+    prompt: string,
+    modelo: string,
+    json: boolean,
+    timeoutMs: number,
   ): Promise<string> {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
     const model = genAI.getGenerativeModel({
-      model: GEMINI_MODEL,
-      generationConfig,
+      model: modelo,
+      ...(json
+        ? { generationConfig: { responseMimeType: 'application/json' } }
+        : {}),
     });
 
     const controller = new AbortController();
@@ -205,6 +344,56 @@ ${detalhamentoSessoes}`;
     }
   }
 
+  // Chama um modelo específico de um provedor compatível com o formato de
+  // chat completions da OpenAI (Groq, OpenRouter) via fetch nativo, com o
+  // mesmo contrato de timeout dos modelos Gemini. Reaproveitado pelas duas
+  // camadas — só muda endpoint/chave/modelo.
+  private async chamarApiCompativelOpenAI(
+    url: string,
+    apiKey: string,
+    modelo: string,
+    prompt: string,
+    json: boolean,
+    timeoutMs: number,
+  ): Promise<string> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const resposta = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: modelo,
+          messages: [{ role: 'user', content: prompt }],
+          ...(json ? { response_format: { type: 'json_object' } } : {}),
+        }),
+        signal: controller.signal,
+      });
+
+      if (!resposta.ok) {
+        const corpoErro = await resposta.text();
+        throw new Error(
+          `respondeu ${resposta.status}: ${corpoErro.slice(0, 200)}`,
+        );
+      }
+
+      const dados = (await resposta.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const texto = dados.choices?.[0]?.message?.content;
+      if (!texto) {
+        throw new Error('retornou resposta sem conteúdo');
+      }
+      return texto;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   private montarPromptIA(relatorio: RelatorioTextual): string {
     const { metricas, secoes } = relatorio;
 
@@ -215,7 +404,7 @@ Regras obrigatórias:
 - Não invente nenhum dado, número ou fato que não esteja nas métricas ou no texto original abaixo.
 - Você não recebeu nome, responsáveis ou qualquer dado de identificação pessoal — não mencione nada disso.
 - Mantenha o tom técnico-pedagógico e a conclusão de cada seção.
-- Responda APENAS com um JSON no formato [{ "titulo": string, "corpo": string }, ...], sem markdown e sem texto fora do JSON.
+- Responda APENAS com um JSON no formato { "secoes": [{ "titulo": string, "corpo": string }, ...] }, sem markdown e sem texto fora do JSON.
 
 Métricas (dados anonimizados):
 - Total de sessões: ${metricas.totalSessoes}
@@ -231,7 +420,17 @@ ${secoes.map((secao, i) => `${i + 1}. [${secao.titulo}] ${secao.corpo}`).join('\
     texto: string,
     quantidadeEsperada: number,
   ): SecaoRelatorio[] {
-    const dados: unknown = JSON.parse(texto);
+    const json: unknown = JSON.parse(texto);
+
+    // Gemini aceita array solto no topo; provedores compatíveis com o modo
+    // JSON da OpenAI (ex: Groq) exigem um objeto no nível raiz — aceitamos
+    // as duas formas em vez de depender de cada modelo seguir o formato à risca.
+    const dados: unknown =
+      json !== null &&
+      typeof json === 'object' &&
+      Array.isArray((json as { secoes?: unknown }).secoes)
+        ? (json as { secoes: unknown }).secoes
+        : json;
 
     if (!Array.isArray(dados) || dados.length !== quantidadeEsperada) {
       throw new Error('Resposta da IA em formato inesperado');
