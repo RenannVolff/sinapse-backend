@@ -34,6 +34,7 @@ const AUDITED_RESOURCE_BY_CONTROLLER: Record<string, string> = {
   PeiController: 'PEI',
   PeiTemplateController: 'PEI_TEMPLATE',
   TarefasController: 'TAREFA',
+  ExportacaoController: 'EXPORTACAO_DOCX',
 };
 
 @Injectable()
