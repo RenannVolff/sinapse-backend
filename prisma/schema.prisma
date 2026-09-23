@@ -17,6 +17,8 @@ model Usuario {
   emailVerificado          Boolean       @default(false)
   tokenVerificacao         String?
   tokenVerificacaoExpiraEm DateTime?
+  tokenRecuperacaoSenha    String?
+  tokenRecuperacaoExpiraEm DateTime?
   criadoEm                 DateTime      @default(now())
   aprendentes              Aprendente[]
   peiTemplates             PeiTemplate[]

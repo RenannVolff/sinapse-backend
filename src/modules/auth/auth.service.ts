@@ -19,6 +19,9 @@ export interface JwtPayload {
 const MENSAGEM_REENVIO_GENERICA =
   'Se este e-mail estiver cadastrado e pendente de verificação, um novo link de confirmação foi enviado.';
 
+const MENSAGEM_ESQUECI_SENHA_GENERICA =
+  'Se este e-mail estiver cadastrado, enviamos um link de redefinição de senha.';
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -106,5 +109,60 @@ export class AuthService {
     }
 
     return { mensagem: MENSAGEM_REENVIO_GENERICA };
+  }
+
+  // Envia o link de redefinição de senha SE o e-mail existir no sistema —
+  // mas sempre responde com a mesma mensagem genérica, pra não revelar se
+  // aquele e-mail está cadastrado (mesma proteção contra enumeração da
+  // verificação de e-mail).
+  async esqueciSenha(email: string): Promise<{ mensagem: string }> {
+    const usuario = await this.prisma.usuario.findUnique({ where: { email } });
+
+    if (usuario) {
+      await this.usuariosService.gerarEEnviarTokenRecuperacaoSenha(
+        usuario.id,
+        usuario.email,
+      );
+    }
+
+    return { mensagem: MENSAGEM_ESQUECI_SENHA_GENERICA };
+  }
+
+  // Confirma a redefinição a partir do token enviado por e-mail. Compara o
+  // HASH do token recebido (nunca o valor puro é armazenado) e exige prazo
+  // ainda válido. O token é de uso único: é limpo assim que a senha é
+  // trocada, então não pode ser reaproveitado numa segunda tentativa.
+  async redefinirSenha(
+    tokenPuro: string,
+    novaSenha: string,
+  ): Promise<{ mensagem: string }> {
+    const tokenHash = crypto.createHash('sha256').update(tokenPuro).digest('hex');
+
+    const usuario = await this.prisma.usuario.findFirst({
+      where: { tokenRecuperacaoSenha: tokenHash },
+    });
+
+    if (
+      !usuario ||
+      !usuario.tokenRecuperacaoExpiraEm ||
+      usuario.tokenRecuperacaoExpiraEm < new Date()
+    ) {
+      throw new BadRequestException(
+        'Token de recuperação inválido ou expirado. Solicite uma nova redefinição em /auth/esqueci-senha.',
+      );
+    }
+
+    const senhaHash = await bcrypt.hash(novaSenha, 10);
+
+    await this.prisma.usuario.update({
+      where: { id: usuario.id },
+      data: {
+        senhaHash,
+        tokenRecuperacaoSenha: null,
+        tokenRecuperacaoExpiraEm: null,
+      },
+    });
+
+    return { mensagem: 'Senha redefinida com sucesso. Você já pode fazer login.' };
   }
 }

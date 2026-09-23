@@ -13,6 +13,7 @@ import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 
 const TOKEN_VERIFICACAO_VALIDADE_MS = 24 * 60 * 60 * 1000;
+const TOKEN_RECUPERACAO_SENHA_VALIDADE_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class UsuariosService {
@@ -40,6 +41,28 @@ export class UsuariosService {
     });
 
     await this.emailService.enviarEmailVerificacao(email, tokenPuro);
+  }
+
+  // Mesmo padrão do token de verificação: gera token aleatório, guarda só o
+  // HASH com prazo de 1h, e envia o valor puro por e-mail.
+  async gerarEEnviarTokenRecuperacaoSenha(
+    usuarioId: string,
+    email: string,
+  ): Promise<void> {
+    const tokenPuro = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(tokenPuro).digest('hex');
+
+    await this.prisma.usuario.update({
+      where: { id: usuarioId },
+      data: {
+        tokenRecuperacaoSenha: tokenHash,
+        tokenRecuperacaoExpiraEm: new Date(
+          Date.now() + TOKEN_RECUPERACAO_SENHA_VALIDADE_MS,
+        ),
+      },
+    });
+
+    await this.emailService.enviarEmailRecuperacaoSenha(email, tokenPuro);
   }
 
   async create(data: CreateUsuarioDto) {

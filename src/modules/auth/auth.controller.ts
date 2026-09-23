@@ -4,6 +4,8 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { VerificarEmailDto } from './dto/verificar-email.dto';
 import { ReenviarVerificacaoDto } from './dto/reenviar-verificacao.dto';
+import { EsqueciSenhaDto } from './dto/esqueci-senha.dto';
+import { RedefinirSenhaDto } from './dto/redefinir-senha.dto';
 import { IsPublic } from './decorators/is-public.decorator';
 
 @ApiTags('Autenticação')
@@ -32,5 +34,21 @@ export class AuthController {
   @ApiOperation({ summary: 'Reenvia o e-mail de confirmação de cadastro' })
   reenviarVerificacao(@Body() dto: ReenviarVerificacaoDto) {
     return this.authService.reenviarVerificacao(dto.email);
+  }
+
+  @IsPublic()
+  @Post('esqueci-senha')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Solicita o envio do link de redefinição de senha' })
+  esqueciSenha(@Body() dto: EsqueciSenhaDto) {
+    return this.authService.esqueciSenha(dto.email);
+  }
+
+  @IsPublic()
+  @Post('redefinir-senha')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Redefine a senha a partir do token enviado por e-mail' })
+  redefinirSenha(@Body() dto: RedefinirSenhaDto) {
+    return this.authService.redefinirSenha(dto.token, dto.novaSenha);
   }
 }
