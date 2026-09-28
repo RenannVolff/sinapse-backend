@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { VerificarEmailDto } from './dto/verificar-email.dto';
@@ -14,6 +15,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @IsPublic()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Realiza o login e retorna o Token JWT' })
@@ -22,13 +24,16 @@ export class AuthController {
   }
 
   @IsPublic()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Get('verificar-email')
   @ApiOperation({ summary: 'Confirma o cadastro a partir do token enviado por e-mail' })
   verificarEmail(@Query() query: VerificarEmailDto) {
     return this.authService.verificarEmail(query.token);
   }
 
+  // Cada chamada dispara um e-mail real
   @IsPublic()
+  @Throttle({ default: { limit: 3, ttl: 600_000 } })
   @Post('reenviar-verificacao')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reenvia o e-mail de confirmação de cadastro' })
@@ -36,7 +41,9 @@ export class AuthController {
     return this.authService.reenviarVerificacao(dto.email);
   }
 
+  // Cada chamada dispara um e-mail real
   @IsPublic()
+  @Throttle({ default: { limit: 3, ttl: 600_000 } })
   @Post('esqueci-senha')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Solicita o envio do link de redefinição de senha' })
@@ -45,6 +52,7 @@ export class AuthController {
   }
 
   @IsPublic()
+  @Throttle({ default: { limit: 5, ttl: 600_000 } })
   @Post('redefinir-senha')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Redefine a senha a partir do token enviado por e-mail' })

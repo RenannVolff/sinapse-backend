@@ -1,9 +1,8 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { JwtAuthGuard } from './jwt-auth.guard';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
@@ -12,20 +11,20 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
   imports: [
     PrismaModule,
     UsuariosModule,
-    JwtModule.register({
+    // registerAsync: o segredo é lido em tempo de execução (depois do .env
+    // carregado), sem valor padrão — main.ts recusa subir sem JWT_SECRET.
+    JwtModule.registerAsync({
       global: true,
-      secret: process.env.JWT_SECRET || 'segredo_padrao_tcc',
-      signOptions: { expiresIn: '1d' },
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.getOrThrow<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '1d' },
+      }),
     }),
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    {
-      provide: APP_GUARD, // Define que a segurança é Global
-      useClass: JwtAuthGuard,
-    },
-  ],
+  // JwtAuthGuard é registrado como APP_GUARD no AppModule, logo após o
+  // ThrottlerGuard, para garantir a ordem de execução dos guards globais.
+  providers: [AuthService, JwtStrategy],
 })
 export class AuthModule {}

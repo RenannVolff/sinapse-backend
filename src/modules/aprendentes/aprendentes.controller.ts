@@ -11,6 +11,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AprendentesService } from './aprendentes.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
 import { UpdateFaseAprendenteDto } from './dto/update-fase-aprendente.dto';
@@ -72,6 +73,7 @@ export class AprendentesController {
 
   // --- ROTA ATUALIZADA: Recebe as datas de Início e Fim da URL ---
   @Get(':id/relatorio-ia')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } }) // rota cara: chama a cascata de IA
   @ApiOperation({ summary: 'Gera gráfico e laudo de IA filtrado por data' })
   @ApiQuery({
     name: 'inicio',

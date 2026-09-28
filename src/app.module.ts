@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -19,10 +20,14 @@ import { TarefasModule } from './modules/tarefas/tarefas.module';
 import { ExportacaoModule } from './modules/exportacao/exportacao.module';
 import { EmailModule } from './modules/email/email.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
+import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Limite padrão generoso (por IP): o front faz várias chamadas por tela
+    // e polling de notificações a cada 60s. Rotas sensíveis apertam com @Throttle.
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 100 }]),
     PrismaModule,
     UsuariosModule,
     AprendentesModule,
@@ -42,6 +47,16 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor';
   controllers: [AppController],
   providers: [
     AppService,
+    // Guards globais executam na ordem de registro: o rate limit vem antes
+    // da autenticação, para barrar abuso sem gastar validação de JWT.
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor,

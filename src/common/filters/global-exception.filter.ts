@@ -27,10 +27,17 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     const { statusCode, message } = this.resolveStatusAndMessage(exception);
 
-    this.logger.error(
-      `${request.method} ${request.originalUrl} -> ${statusCode}`,
-      exception instanceof Error ? exception.stack : String(exception),
-    );
+    if (statusCode === HttpStatus.TOO_MANY_REQUESTS) {
+      // Esperado sob abuso: sem stack trace para não inundar o log
+      this.logger.warn(
+        `${request.method} ${request.originalUrl} -> ${statusCode} (ip ${request.ip})`,
+      );
+    } else {
+      this.logger.error(
+        `${request.method} ${request.originalUrl} -> ${statusCode}`,
+        exception instanceof Error ? exception.stack : String(exception),
+      );
+    }
 
     const body: ErrorResponseBody = {
       statusCode,
@@ -50,6 +57,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const response = exception.getResponse();
 
+      // Rate limit (ThrottlerGuard): mensagem padrão da lib vem em inglês
+      if (status === HttpStatus.TOO_MANY_REQUESTS) {
+        return {
+          statusCode: status,
+          message:
+            'Muitas requisições. Aguarde um momento e tente novamente.',
+        };
+      }
+
       if (typeof response === 'string') {
         return { statusCode: status, message: response };
       }
@@ -65,6 +81,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       }
 
       return { statusCode: status, message: exception.message };
+    }
+
+    // Erro do body-parser (express) quando o corpo excede o limite configurado no main.ts
+    if (
+      typeof exception === 'object' &&
+      exception !== null &&
+      (exception as { type?: unknown }).type === 'entity.too.large'
+    ) {
+      return {
+        statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+        message: 'O conteúdo enviado excede o tamanho máximo permitido.',
+      };
     }
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
