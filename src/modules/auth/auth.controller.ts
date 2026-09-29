@@ -2,12 +2,17 @@ import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus } from '@nestj
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
+import { DoisFatoresService } from './dois-fatores.service';
 import { LoginDto } from './dto/login.dto';
 import { VerificarEmailDto } from './dto/verificar-email.dto';
 import { ReenviarVerificacaoDto } from './dto/reenviar-verificacao.dto';
 import { EsqueciSenhaDto } from './dto/esqueci-senha.dto';
 import { RedefinirSenhaDto } from './dto/redefinir-senha.dto';
+import { AtivarDoisFatoresDto } from './dto/ativar-dois-fatores.dto';
+import { DesativarDoisFatoresDto } from './dto/desativar-dois-fatores.dto';
+import { VerificarLoginDoisFatoresDto } from './dto/verificar-login-dois-fatores.dto';
 import { IsPublic } from './decorators/is-public.decorator';
+import { CurrentUser } from './decorators/current-user.decorator';
 import {
   honeypotAcionado,
   loginFalso,
@@ -16,7 +21,10 @@ import {
 @ApiTags('Autenticação')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly doisFatoresService: DoisFatoresService,
+  ) {}
 
   @IsPublic()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
@@ -65,5 +73,48 @@ export class AuthController {
   @ApiOperation({ summary: 'Redefine a senha a partir do token enviado por e-mail' })
   redefinirSenha(@Body() dto: RedefinirSenhaDto) {
     return this.authService.redefinirSenha(dto.token, dto.novaSenha);
+  }
+
+  @Post('2fa/gerar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Gera o segredo TOTP e o QR code (2FA ainda inativo)' })
+  gerarDoisFatores(@CurrentUser('id') usuarioId: string) {
+    return this.doisFatoresService.gerarSegredo(usuarioId);
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('2fa/ativar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Ativa o 2FA e devolve os códigos de backup (exibidos uma única vez)' })
+  ativarDoisFatores(
+    @CurrentUser('id') usuarioId: string,
+    @Body() dto: AtivarDoisFatoresDto,
+  ) {
+    return this.doisFatoresService.ativar(usuarioId, dto.codigo);
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('2fa/desativar')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Desativa o 2FA (exige a senha atual)' })
+  desativarDoisFatores(
+    @CurrentUser('id') usuarioId: string,
+    @Body() dto: DesativarDoisFatoresDto,
+  ) {
+    return this.authService.desativarDoisFatores(usuarioId, dto.senha);
+  }
+
+  // Mesmo limite do login: segura força bruta nos 10^6 códigos possíveis
+  // durante os 5 minutos de validade do token temporário.
+  @IsPublic()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('2fa/verificar-login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Conclui o login com 2FA e retorna o Token JWT' })
+  verificarLoginDoisFatores(@Body() dto: VerificarLoginDoisFatoresDto) {
+    return this.authService.verificarLoginDoisFatores(
+      dto.tokenTemporario,
+      dto.codigo,
+    );
   }
 }

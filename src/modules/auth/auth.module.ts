@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { DoisFatoresService } from './dois-fatores.service';
 import { JwtStrategy } from './jwt.strategy';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
@@ -25,6 +26,6 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
   controllers: [AuthController],
   // JwtAuthGuard é registrado como APP_GUARD no AppModule, logo após o
   // ThrottlerGuard, para garantir a ordem de execução dos guards globais.
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, DoisFatoresService, JwtStrategy],
 })
 export class AuthModule {}

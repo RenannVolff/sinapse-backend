@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../prisma/prisma.service';
-import { JwtPayload } from './auth.service';
+import { JwtPayload, TIPO_TOKEN_PRE_AUTH_2FA } from './auth.service';
 import { AuthenticatedUser } from './decorators/current-user.decorator';
 
 @Injectable()
@@ -21,6 +21,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
+    // Defesa em profundidade: o token temporário do 2FA já é assinado com
+    // outro segredo, mas nunca deve valer como sessão, mesmo assim.
+    if (payload.tipo === TIPO_TOKEN_PRE_AUTH_2FA) {
+      throw new UnauthorizedException('Token inválido ou expirado');
+    }
+
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: payload.sub },
     });

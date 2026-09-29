@@ -21,7 +21,12 @@ export function loginFalso(email: string) {
     crypto.randomBytes(bytes).toString('base64url');
   return {
     token: `${parte(27)}.${parte(60)}.${parte(32)}`,
-    usuario: { id: crypto.randomUUID(), nome: '', email },
+    usuario: {
+      id: crypto.randomUUID(),
+      nome: '',
+      email,
+      duploFatorAtivo: false,
+    },
   };
 }
 

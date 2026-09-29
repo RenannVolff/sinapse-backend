@@ -19,6 +19,9 @@ model Usuario {
   tokenVerificacaoExpiraEm DateTime?
   tokenRecuperacaoSenha    String?
   tokenRecuperacaoExpiraEm DateTime?
+  duploFatorAtivo          Boolean       @default(false)
+  duploFatorSegredo        String?
+  duploFatorCodigosBackup  String[]      @default([])
   criadoEm                 DateTime      @default(now())
   aprendentes              Aprendente[]
   peiTemplates             PeiTemplate[]
