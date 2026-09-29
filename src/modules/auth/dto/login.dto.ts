@@ -1,5 +1,11 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 
 export class LoginDto {
   @ApiProperty({
@@ -17,4 +23,12 @@ export class LoginDto {
   @IsString()
   @IsNotEmpty({ message: 'A senha é obrigatória' })
   senha!: string;
+
+  // Honeypot anti-bot: campo escondido via CSS no frontend, nenhum humano
+  // preenche. Se vier preenchido, o controller devolve um sucesso falso.
+  @ApiHideProperty()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  website?: string;
 }

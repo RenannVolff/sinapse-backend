@@ -8,6 +8,10 @@ import { ReenviarVerificacaoDto } from './dto/reenviar-verificacao.dto';
 import { EsqueciSenhaDto } from './dto/esqueci-senha.dto';
 import { RedefinirSenhaDto } from './dto/redefinir-senha.dto';
 import { IsPublic } from './decorators/is-public.decorator';
+import {
+  honeypotAcionado,
+  loginFalso,
+} from '../../common/honeypot/honeypot';
 
 @ApiTags('Autenticação')
 @Controller('auth')
@@ -20,6 +24,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Realiza o login e retorna o Token JWT' })
   login(@Body() loginDto: LoginDto) {
+    if (honeypotAcionado(loginDto.website, 'POST /auth/login')) {
+      return loginFalso(loginDto.email);
+    }
     return this.authService.login(loginDto);
   }
 

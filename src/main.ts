@@ -4,7 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { json } from 'express';
+import { json, NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 
 async function bootstrap() {
@@ -32,6 +32,19 @@ async function bootstrap() {
 
   // 0.2 Confia no primeiro proxy (ngrok/Render) para o rate limit enxergar o IP real
   app.set('trust proxy', 1);
+
+  // 0.2.1 Força HTTPS só em produção (local usa http normalmente). Atrás do
+  // proxy (Render), req.secure vem do X-Forwarded-Proto; requisições sem esse
+  // cabeçalho (ex: health check interno) passam direto. 308 preserva método
+  // e corpo em POST/PATCH.
+  if (process.env.NODE_ENV === 'production') {
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.get('x-forwarded-proto') && !req.secure) {
+        return res.redirect(308, `https://${req.get('host')}${req.originalUrl}`);
+      }
+      next();
+    });
+  }
 
   // 0.3 Limites do corpo JSON. A ORDEM IMPORTA: o parser de 15mb (exportação
   // .docx envia 3 gráficos em base64) precisa vir antes do de 100kb, que
