@@ -32,6 +32,12 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       this.logger.warn(
         `${request.method} ${request.originalUrl} -> ${statusCode} (ip ${request.ip})`,
       );
+    } else if (statusCode < 500) {
+      // 4xx é erro do cliente (validação, regra de negócio): o stack não
+      // ajuda a diagnosticar nada e só polui o log. Nunca loga o corpo (LGPD).
+      this.logger.warn(
+        `${request.method} ${request.originalUrl} -> ${statusCode}`,
+      );
     } else {
       this.logger.error(
         `${request.method} ${request.originalUrl} -> ${statusCode}`,

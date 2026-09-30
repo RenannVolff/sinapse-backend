@@ -71,9 +71,8 @@ export class AuthService {
       throw new UnauthorizedException('Credenciais inválidas.');
     }
 
-    // Com 2FA ativo, a senha sozinha não basta: devolve só um token
-    // temporário, que precisa ser trocado em /auth/2fa/verificar-login
-    // junto com o código do app autenticador.
+    // Com 2FA ativo, a senha sozinha não basta: devolve um token temporário
+    // que só vira sessão em /auth/2fa/verificar-login, junto com o código.
     if (usuario.duploFatorAtivo) {
       const payloadPreAuth: JwtPayload = {
         sub: usuario.id,
@@ -170,9 +169,8 @@ export class AuthService {
     };
   }
 
-  // Confirma o cadastro a partir do token de verificação enviado por e-mail.
-  // Compara o HASH do token recebido (nunca o valor puro é armazenado) e
-  // exige prazo ainda válido.
+  // O banco guarda só o hash do token, nunca o valor puro — por isso a
+  // busca é pelo hash do que chegou.
   async verificarEmail(tokenPuro: string): Promise<{ mensagem: string }> {
     const tokenHash = crypto.createHash('sha256').update(tokenPuro).digest('hex');
 
@@ -202,9 +200,8 @@ export class AuthService {
     return { mensagem: 'E-mail verificado com sucesso. Você já pode fazer login.' };
   }
 
-  // Reenvia o e-mail de verificação SE o usuário existir e ainda não tiver
-  // confirmado o cadastro — mas sempre responde com a mesma mensagem
-  // genérica, pra não revelar se aquele e-mail existe no sistema.
+  // Responde sempre a mesma mensagem genérica, exista o e-mail ou não, para
+  // não permitir enumeração de contas.
   async reenviarVerificacao(email: string): Promise<{ mensagem: string }> {
     const usuario = await this.prisma.usuario.findUnique({ where: { email } });
 
@@ -218,10 +215,7 @@ export class AuthService {
     return { mensagem: MENSAGEM_REENVIO_GENERICA };
   }
 
-  // Envia o link de redefinição de senha SE o e-mail existir no sistema —
-  // mas sempre responde com a mesma mensagem genérica, pra não revelar se
-  // aquele e-mail está cadastrado (mesma proteção contra enumeração da
-  // verificação de e-mail).
+  // Mesma proteção contra enumeração de reenviarVerificacao().
   async esqueciSenha(email: string): Promise<{ mensagem: string }> {
     const usuario = await this.prisma.usuario.findUnique({ where: { email } });
 
@@ -235,10 +229,8 @@ export class AuthService {
     return { mensagem: MENSAGEM_ESQUECI_SENHA_GENERICA };
   }
 
-  // Confirma a redefinição a partir do token enviado por e-mail. Compara o
-  // HASH do token recebido (nunca o valor puro é armazenado) e exige prazo
-  // ainda válido. O token é de uso único: é limpo assim que a senha é
-  // trocada, então não pode ser reaproveitado numa segunda tentativa.
+  // Mesmo esquema de hash de verificarEmail(). O token é de uso único: é
+  // limpo junto com a troca da senha.
   async redefinirSenha(
     tokenPuro: string,
     novaSenha: string,

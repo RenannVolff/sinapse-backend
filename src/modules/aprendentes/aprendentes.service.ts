@@ -2,11 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
 import { IaService, SessaoQualitativa } from '../ia/ia.service';
-import { FaseAtendimento, Prisma } from '@prisma/client';
-
-type SessaoComAtividades = Prisma.AtendimentoGetPayload<{
-  include: { atividades: { include: { itensChecklist: true } } };
-}>;
+import { FaseAtendimento } from '@prisma/client';
+import { calcularScoreSessao } from '../../common/utils/calcular-score';
 
 @Injectable()
 export class AprendentesService {
@@ -80,27 +77,8 @@ export class AprendentesService {
     ]);
   }
 
-  // Calcula o score (0-100) de uma sessão a partir das atividades e
-  // itens de checklist, ponderado pelo nível de dificuldade de cada
-  // atividade. Puramente matemático — sem chamadas de IA.
-  private calcularScoreSessao(sessao: SessaoComAtividades): number {
-    let scoreTotalSessao = 0;
-    let pesoTotalSessao = 0;
-
-    sessao.atividades.forEach((ativ) => {
-      const acertos = ativ.itensChecklist.filter((i) => i.realizado).length;
-      const scoreAtividade = (acertos / 5) * 100;
-
-      scoreTotalSessao += scoreAtividade * ativ.nivelDificuldade;
-      pesoTotalSessao += ativ.nivelDificuldade;
-    });
-
-    return pesoTotalSessao > 0
-      ? Math.round(scoreTotalSessao / pesoTotalSessao)
-      : 0;
-  }
-
-  // --- RELATÓRIO AUTÔNOMO (HEURÍSTICO) ---
+  // Texto heurístico, enriquecido via IA quando possível (ver
+  // IaService.enriquecerResumoAtendimento).
   async gerarRelatorioInteligente(
     aprendenteId: string,
     dataInicioIso: string,
@@ -116,6 +94,8 @@ export class AprendentesService {
         aprendenteId,
         aprendente: { usuarioId },
         deletedAt: null,
+        // Mesmo critério de Relatórios e Dashboard: só sessões finalizadas.
+        concluido: true,
         dataAtendimento: {
           gte: inicio,
           lte: fim,
@@ -131,16 +111,15 @@ export class AprendentesService {
     if (sessoes.length === 0) {
       return {
         resumoIa:
-          'Não há atendimentos registrados para este paciente no período selecionado.',
+          'Não há atendimentos concluídos para este paciente no período selecionado.',
         dadosGrafico: [],
       };
     }
 
     const nomeAprendente = sessoes[0].aprendente.nomeCompleto;
 
-    // 1. Calcula os gráficos matemáticos
     const dadosGrafico = sessoes.map((sessao) => {
-      const mediaSessao = this.calcularScoreSessao(sessao);
+      const mediaSessao = calcularScoreSessao(sessao);
 
       return {
         data: sessao.dataAtendimento.toLocaleDateString('pt-BR', {
@@ -152,11 +131,8 @@ export class AprendentesService {
       };
     });
 
-    const dadosValidos = dadosGrafico.filter((d) => d.score > 0);
-
-    // Dados qualitativos por sessão (número, não data — e sem PII) para
-    // enriquecer o resumoIa via Gemini: observações do atendimento, de cada
-    // atividade e de cada item de checklist, descartando vazias/nulas.
+    // Grounding qualitativo para a IA: sessão identificada por número, não
+    // por data, e sem PII.
     const sessoesQualitativas: SessaoQualitativa[] = sessoes.map(
       (sessao, index) => {
         const niveis = sessao.atividades.map((a) => a.nivelDificuldade);
@@ -188,63 +164,51 @@ export class AprendentesService {
       },
     );
 
-    let resumoIa = '';
+    const numSessoes = dadosGrafico.length;
+    const mediaGeral = Math.round(
+      dadosGrafico.reduce((acc, curr) => acc + curr.score, 0) / numSessoes,
+    );
 
-    if (dadosValidos.length > 0) {
-      const numSessoes = dadosValidos.length;
-      const mediaGeral = Math.round(
-        dadosValidos.reduce((acc, curr) => acc + curr.score, 0) / numSessoes,
-      );
+    const primeiraSessao = dadosGrafico[0].score;
+    const ultimaSessao = dadosGrafico[numSessoes - 1].score;
 
-      const primeiraSessao = dadosValidos[0].score;
-      const ultimaSessao = dadosValidos[numSessoes - 1].score;
+    let tendencia = '';
+    if (numSessoes === 1)
+      tendencia = 'estabilidade inicial (apenas uma sessão analisada)';
+    else if (ultimaSessao > primeiraSessao + 5)
+      tendencia = 'evolução progressiva do quadro';
+    else if (ultimaSessao < primeiraSessao - 5)
+      tendencia = 'declínio no rendimento, exigindo atenção';
+    else tendencia = 'estabilidade cognitiva';
 
-      let tendencia = '';
-      if (numSessoes === 1)
-        tendencia = 'estabilidade inicial (apenas uma sessão analisada)';
-      else if (ultimaSessao > primeiraSessao + 5)
-        tendencia = 'evolução progressiva do quadro';
-      else if (ultimaSessao < primeiraSessao - 5)
-        tendencia = 'declínio no rendimento, exigindo atenção';
-      else tendencia = 'estabilidade cognitiva';
+    let avaliacao = '';
+    if (mediaGeral >= 80)
+      avaliacao = 'excelente assimilação das atividades propostas';
+    else if (mediaGeral >= 50)
+      avaliacao =
+        'desenvolvimento dentro do esperado para o nível de dificuldade';
+    else
+      avaliacao = 'necessidade de maior intervenção e adaptação dos estímulos';
 
-      let avaliacao = '';
-      if (mediaGeral >= 80)
-        avaliacao = 'excelente assimilação das atividades propostas';
-      else if (mediaGeral >= 50)
-        avaliacao =
-          'desenvolvimento dentro do esperado para o nível de dificuldade';
-      else
-        avaliacao =
-          'necessidade de maior intervenção e adaptação dos estímulos';
+    let resumoIa = `Análise Sistêmica Automática: No período selecionado, o aprendente ${nomeAprendente} realizou atividades avaliativas em ${numSessoes} sessão(ões) concluída(s). A média global de desempenho cognitivo-matemático foi de ${mediaGeral}%, indicando uma ${avaliacao}. Ao observar o histórico, nota-se uma tendência de ${tendencia}. O sistema recomenda a continuidade dos atendimentos ajustando o nível de dificuldade com base nesta métrica.`;
 
-      resumoIa = `Análise Sistêmica Automática: No período selecionado, o aprendente ${nomeAprendente} realizou atividades avaliativas com pontuação válida em ${numSessoes} sessão(ões). A média global de desempenho cognitivo-matemático foi de ${mediaGeral}%, indicando uma ${avaliacao}. Ao observar o histórico, nota-se uma tendência de ${tendencia}. O sistema recomenda a continuidade dos atendimentos ajustando o nível de dificuldade com base nesta métrica.`;
-
-      // Enriquecer o resumo via Gemini a partir das mesmas métricas já
-      // calculadas acima (sem nome/PII); em qualquer falha, mantém a
-      // heurística acima como está.
-      const resumoViaIa = await this.iaService.enriquecerResumoAtendimento({
-        numSessoes,
-        mediaGeral,
-        tendencia,
-        avaliacao,
-        sessoes: sessoesQualitativas,
-      });
-      if (resumoViaIa) {
-        resumoIa = resumoViaIa;
-      }
-    } else {
-      resumoIa =
-        'As sessões encontradas não possuem atividades com checklists marcados para gerar o laudo matemático.';
+    // nomeAprendente fica de fora de propósito (PII).
+    const resumoViaIa = await this.iaService.enriquecerResumoAtendimento({
+      numSessoes,
+      mediaGeral,
+      tendencia,
+      avaliacao,
+      sessoes: sessoesQualitativas,
+    });
+    if (resumoViaIa) {
+      resumoIa = resumoViaIa;
     }
 
-    return { resumoIa, dadosGrafico: dadosValidos };
+    return { resumoIa, dadosGrafico };
   }
 
-  // --- HISTÓRICO COMPLETO PARA GRÁFICOS DE ACOMPANHAMENTO (SEM IA) ---
-  // Retorna todos os atendimentos do aprendente, sem filtro de data, com
-  // score calculado matematicamente — usado para alimentar gráficos
-  // AB-ABAB, média por período e regressão linear no frontend.
+  // Histórico completo, sem filtro de data: alimenta os gráficos AB-ABAB,
+  // média por período e regressão linear do frontend.
   async findGraficosAcompanhamento(aprendenteId: string, usuarioId: string) {
     const sessoes = await this.prisma.atendimento.findMany({
       where: {
@@ -261,7 +225,7 @@ export class AprendentesService {
     return sessoes.map((sessao) => ({
       id: sessao.id,
       dataAtendimento: sessao.dataAtendimento.toISOString(),
-      score: this.calcularScoreSessao(sessao),
+      score: calcularScoreSessao(sessao),
       fase: sessao.fase,
       status: sessao.status,
     }));

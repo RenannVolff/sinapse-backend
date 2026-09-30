@@ -123,8 +123,7 @@ export class DoisFatoresService {
     return { codigosBackup };
   }
 
-  // Aceita um código TOTP de 6 dígitos ou um código de backup. O código de
-  // backup é de uso único: é removido da lista assim que aceito.
+  // Aceita código TOTP ou de backup; o de backup é de uso único.
   async verificarCodigo(usuarioId: string, codigo: string): Promise<boolean> {
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: usuarioId },
@@ -144,9 +143,9 @@ export class DoisFatoresService {
       return false;
     }
 
-    // A condição `has` no WHERE torna o consumo atômico: se duas requisições
-    // usarem o mesmo código ao mesmo tempo, só uma encontra o hash ainda na
-    // lista e atualiza a linha — a outra afeta 0 linhas e é recusada.
+    // O `has` no WHERE torna o consumo atômico: se duas requisições usarem o
+    // mesmo código ao mesmo tempo, só uma ainda acha o hash na lista; a outra
+    // afeta 0 linhas e é recusada.
     const { count } = await this.prisma.usuario.updateMany({
       where: {
         id: usuarioId,

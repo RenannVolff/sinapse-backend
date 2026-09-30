@@ -5,53 +5,38 @@ import { RelatoriosService } from '../relatorios/relatorios.service';
 export const AVISO_REVISAO_PADRAO =
   'Este relatório é um rascunho gerado automaticamente e deve ser revisado por um profissional antes do envio.';
 
-// Orçamento TOTAL para "tentar IA antes da heurística" — não é por tentativa.
-// A cascata abaixo pode passar por vários modelos/provedores dentro desse
-// mesmo orçamento (cada tentativa usa o tempo que sobrou), então o pior caso
-// nunca ultrapassa este valor, só o distribui entre mais chances de sucesso.
+// Orçamento TOTAL da cascata inteira (Gemini + Groq + OpenRouter), não por
+// tentativa: cada modelo usa o tempo que sobrou, então o pior caso nunca
+// passa disso — só ganha mais chances de sucesso dentro do mesmo prazo.
 const GEMINI_TIMEOUT_MS = 15_000;
-// O relatório de atendimento pede múltiplos parágrafos correlacionando
-// métricas e observações qualitativas — gera mais tokens, então damos uma
-// folga maior antes de cair no fallback heurístico.
+// Mais folga que o relatório comum: o resumo de atendimento pede vários
+// parágrafos cruzando métricas e observações, então gera mais tokens.
 const RESUMO_ATENDIMENTO_TIMEOUT_MS = 20_000;
-// Não vale a pena tentar mais um modelo/provedor com menos que isso de
-// orçamento restante — não dá tempo de uma resposta real, só desperdiça um
-// round-trip de rede.
+// Abaixo disso não dá tempo de uma resposta real; tentar mais um modelo só
+// desperdiça um round-trip.
 const TEMPO_MINIMO_TENTATIVA_MS = 2_000;
 
-// Cascata de modelos Gemini, do mais leve pro mais robusto. Todos são aliases
-// "rolling" da Google (sempre apontam pra versão atual daquela categoria) em
-// vez de nomes de versão fixos — modelos pinados (ex: gemini-3.1-flash-lite)
-// já ficaram indisponíveis com 503 "high demand"/depreciados sem aviso, e
-// aliases sofrem bem menos disso. Categorias diferentes (lite/flash/pro)
-// também tendem a ter pools de capacidade separados no lado da Google, então
-// uma sobrecarga pontual numa categoria não derruba as outras.
+// Do mais leve pro mais robusto. Usamos os aliases "-latest" em vez de
+// versões fixas porque modelos pinados (ex: gemini-3.1-flash-lite) já
+// começaram a dar 503 "high demand" ou foram depreciados sem aviso. Cada
+// categoria (lite/flash/pro) costuma ter pool de capacidade próprio, então
+// sobrecarga numa não derruba as outras.
 const GEMINI_MODELS_CASCATA = [
   'gemini-flash-lite-latest',
   'gemini-flash-latest',
   'gemini-pro-latest',
 ];
 
-// Camada extra, só ativa se GROQ_API_KEY estiver configurada (conta grátis em
-// console.groq.com) — cai aqui apenas se TODOS os modelos Gemini acima
-// falharem, garantindo uma segunda chance de resposta real da IA antes da
-// heurística. API compatível com o formato OpenAI, chamada via fetch nativo
-// (sem SDK novo).
+// Só ativa com GROQ_API_KEY (conta grátis em console.groq.com).
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODELS_CASCATA = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
 
-// Última camada antes da heurística, só ativa se OPENROUTER_API_KEY estiver
-// configurada (conta grátis em openrouter.ai/keys) — entra apenas se TODOS os
-// modelos Gemini E Groq acima falharem. Também compatível com o formato
-// OpenAI, reaproveitando o mesmo helper de baixo nível do Groq (só muda
-// endpoint/modelos). O catálogo ":free" da OpenRouter (GET
-// https://openrouter.ai/api/v1/models, público, sem precisar de chave) muda
-// com bastante frequência (mais até que os modelos "oficiais" do Gemini) e
-// vários modelos listados como ":free" na prática respondem 403/429 ou
-// travam — os 3 abaixo foram testados manualmente (chat completion real +
-// modo JSON) em 2026-09-14 e responderam rápido (<1s a ~3s) e corretamente;
-// revalide contra o catálogo/teste real antes de assumir bug de código se
-// essa camada começar a falhar.
+// Só ativa com OPENROUTER_API_KEY (conta grátis em openrouter.ai/keys).
+// O catálogo ":free" (GET https://openrouter.ai/api/v1/models, público) muda
+// com frequência, e muitos modelos listados ali respondem 403/429 ou travam
+// na prática. Os 3 abaixo foram testados à mão (chat + modo JSON) em
+// 2026-09-14, respondendo em <1s a ~3s. Se essa camada começar a falhar,
+// revalide o catálogo antes de suspeitar do código.
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_MODELS_CASCATA = [
   'nex-agi/nex-n2.5-mini:free',
@@ -75,8 +60,8 @@ export interface SessaoQualitativa {
 }
 
 export interface RelatorioTextual {
-  // Dados de cadastro do aprendente — só para exibição no relatório dentro do
-  // sistema. NUNCA repassar para montarPromptIA/chamarGemini (PII).
+  // Só para exibição dentro do sistema. NUNCA repassar para
+  // montarPromptIA/chamarGemini (PII).
   identificacao: {
     nomeCompleto: string;
     idade: number;
@@ -98,13 +83,10 @@ export interface RelatorioTextual {
 export class IaService {
   private readonly logger = new Logger(IaService.name);
 
-  // Injeção de dependência para reaproveitar os cálculos
   constructor(private relatoriosService: RelatoriosService) {}
 
-  // Enriquece o relatório heurístico via IA (cascata Gemini + Groq + OpenRouter, ver
-  // chamarIAComFallback); qualquer falha em todos os provedores/modelos
-  // (timeout, rede, rate limit, resposta mal formada) cai automaticamente
-  // para a heurística, sem quebrar a requisição do terapeuta.
+  // Se a cascata inteira falhar (timeout, rede, rate limit, JSON mal
+  // formado), devolve a heurística sem quebrar a requisição do terapeuta.
   async gerarRelatorioComIA(
     aprendenteId: string,
     usuarioId: string,
@@ -133,9 +115,8 @@ export class IaService {
     }
   }
 
-  // Pede as seções em JSON via cascata de IA, usando apenas métricas
-  // anonimizadas e o texto da heurística como grounding — nunca dados de
-  // identificação pessoal.
+  // Apesar do nome, passa pela cascata inteira, não só pelo Gemini. O
+  // grounding é só métricas anonimizadas + texto da heurística, sem PII.
   private async chamarGemini(
     relatorioHeuristica: RelatorioTextual,
   ): Promise<SecaoRelatorio[]> {
@@ -146,11 +127,8 @@ export class IaService {
     return this.parseSecoesIA(texto, relatorioHeuristica.secoes.length);
   }
 
-  // Enriquece o resumo textual do relatório de atendimento (usado pela tela
-  // de Aprendentes) via cascata de IA, a partir de métricas já calculadas e
-  // anonimizadas — sem nome, responsável ou qualquer dado de identificação.
-  // Qualquer falha (sem nenhuma API key, timeout, rede, resposta vazia)
-  // retorna null para o chamador cair no texto heurístico já calculado.
+  // Usado pela tela de Aprendentes. Recebe só métricas já anonimizadas.
+  // Retorna null em qualquer falha para o chamador manter o texto heurístico.
   async enriquecerResumoAtendimento(dados: {
     numSessoes: number;
     mediaGeral: number;
@@ -234,13 +212,9 @@ ${detalhamentoSessoes}`;
     );
   }
 
-  // Tenta a cascata Gemini e, se todos os modelos falharem, cai pra cascata
-  // Groq e depois OpenRouter (cada uma só ativa se sua respectiva API key
-  // estiver configurada) — ordem: Gemini → Groq → OpenRouter → heurística.
-  // Só propaga o erro pro chamador (que aciona a heurística) depois de
-  // esgotar todo mundo. O orçamento de tempo é total, não por tentativa: cada
-  // modelo/provedor usa o tempo que sobrou do timeoutMs original, então o
-  // pior caso nunca ultrapassa o timeout configurado.
+  // Ordem: Gemini → Groq → OpenRouter (cada provedor só entra se tiver chave).
+  // Só lança erro depois de esgotar todos; o chamador então cai na heurística.
+  // timeoutMs é o orçamento total — ver GEMINI_TIMEOUT_MS.
   private async chamarIAComFallback(
     prompt: string,
     opcoes: { json: boolean; timeoutMs: number },
@@ -314,8 +288,6 @@ ${detalhamentoSessoes}`;
     );
   }
 
-  // Chama um modelo Gemini específico com timeout via AbortController e
-  // devolve o texto bruto da resposta.
   private async chamarGeminiModelo(
     prompt: string,
     modelo: string,
@@ -344,10 +316,8 @@ ${detalhamentoSessoes}`;
     }
   }
 
-  // Chama um modelo específico de um provedor compatível com o formato de
-  // chat completions da OpenAI (Groq, OpenRouter) via fetch nativo, com o
-  // mesmo contrato de timeout dos modelos Gemini. Reaproveitado pelas duas
-  // camadas — só muda endpoint/chave/modelo.
+  // Groq e OpenRouter seguem o formato de chat completions da OpenAI, então
+  // um helper com fetch nativo atende os dois sem precisar de SDK.
   private async chamarApiCompativelOpenAI(
     url: string,
     apiKey: string,
@@ -422,9 +392,9 @@ ${secoes.map((secao, i) => `${i + 1}. [${secao.titulo}] ${secao.corpo}`).join('\
   ): SecaoRelatorio[] {
     const json: unknown = JSON.parse(texto);
 
-    // Gemini aceita array solto no topo; provedores compatíveis com o modo
-    // JSON da OpenAI (ex: Groq) exigem um objeto no nível raiz — aceitamos
-    // as duas formas em vez de depender de cada modelo seguir o formato à risca.
+    // O prompt pede { secoes: [...] } porque o modo JSON estilo OpenAI (Groq,
+    // OpenRouter) exige objeto na raiz; o Gemini aceita array solto no topo.
+    // Aceitamos as duas formas em vez de confiar que o modelo siga à risca.
     const dados: unknown =
       json !== null &&
       typeof json === 'object' &&
@@ -518,8 +488,9 @@ ${secoes.map((secao, i) => `${i + 1}. [${secao.titulo}] ${secao.corpo}`).join('\
     return idade;
   }
 
-  // Divide as sessões em grupo inicial/final para suavizar sessões atípicas isoladas.
-  // Com 6+ sessões, compara as 3 primeiras contra as 3 últimas; com menos, usa metade/metade.
+  // Compara médias de grupos em vez de primeira vs. última sessão, para uma
+  // sessão atípica não distorcer a tendência. Com 6+ sessões, 3 primeiras vs.
+  // 3 últimas; com menos, metade/metade.
   private calcularGruposTendencia(dadosGrafico: { evolucao: number }[]) {
     const total = dadosGrafico.length;
     const tamanhoGrupo = total >= 6 ? 3 : Math.floor(total / 2);
@@ -628,11 +599,12 @@ ${secoes.map((secao, i) => `${i + 1}. [${secao.titulo}] ${secao.corpo}`).join('\
     if (taxaFrequencia.totalAgendadas === 0) {
       return {
         titulo,
-        corpo: 'Ainda não há sessões agendadas para calcular a frequência.',
+        corpo:
+          'Ainda não há sessões passadas (sem contar as canceladas) para calcular a frequência.',
       };
     }
 
-    let corpo = `De ${taxaFrequencia.totalAgendadas} sessões agendadas, ${taxaFrequencia.totalFaltas} tiveram falta (frequência de ${taxaFrequencia.taxaFrequencia}%, absenteísmo de ${taxaFrequencia.taxaAbsenteismo}%). `;
+    let corpo = `Das ${taxaFrequencia.totalAgendadas} sessões que já deveriam ter acontecido (sem contar as canceladas), ${taxaFrequencia.totalFaltas} tiveram falta (frequência de ${taxaFrequencia.taxaFrequencia}%, absenteísmo de ${taxaFrequencia.taxaAbsenteismo}%). `;
 
     if (taxaFrequencia.taxaAbsenteismo >= 30) {
       corpo +=

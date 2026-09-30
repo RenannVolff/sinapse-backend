@@ -14,11 +14,11 @@ import {
   IsEnum,
   IsInt,
   IsDateString,
+  Max,
   Min,
-} from 'class-validator'; // Importações de Segurança
+} from 'class-validator';
 import { IsDateNotInPast } from '../../common/validators/is-date-not-in-past.validator';
 
-// DTOs blindados para o NestJS aceitar os dados
 export class CreateAtendimentoDto {
   @IsNotEmpty({ message: 'O identificador do aprendente é obrigatório.' })
   @IsString()
@@ -29,10 +29,12 @@ export class CreateAtendimentoDto {
   @IsDateNotInPast()
   dataAtendimento!: string | Date;
 
-  // Duração da sessão em minutos, usada na checagem de conflito de horário.
+  // Em minutos; usada na checagem de conflito de horário. O teto de 24h é o
+  // que garante a margem de busca de verificarConflitoHorario().
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(1440, { message: 'A duração máxima é de 24h (1440 minutos).' })
   duracaoMinutos?: number;
 
   @IsNotEmpty({ message: 'O título da sessão é obrigatório.' })
@@ -51,11 +53,14 @@ export class CreateAtendimentoDto {
 
 export class UpdateAtendimentoDto {
   @IsOptional()
+  @IsDateString({}, { message: 'Data inválida' })
+  @IsDateNotInPast()
   dataAtendimento?: string | Date;
 
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(1440, { message: 'A duração máxima é de 24h (1440 minutos).' })
   duracaoMinutos?: number;
 
   @IsOptional()
@@ -75,7 +80,6 @@ export class UpdateAtendimentoDto {
   concluido?: boolean;
 }
 
-// DTO dedicado para a troca explícita de status (confirmar/cancelar manualmente).
 export class UpdateStatusAtendimentoDto {
   @IsNotEmpty({ message: 'O status é obrigatório.' })
   @IsEnum(StatusAtendimento)
@@ -119,18 +123,18 @@ export class AtendimentosService {
     }
   }
 
-  // Impede dois atendimentos sobrepostos para o mesmo terapeuta (usuarioId),
-  // independente do aprendente — ele não pode estar em dois lugares ao mesmo
-  // tempo. Atendimentos CANCELADO contam como horário livre/realocável.
+  // O conflito é por terapeuta, não por aprendente: ele não pode estar em
+  // dois atendimentos ao mesmo tempo. CANCELADO libera o horário.
+  // `ignorarId` exclui o próprio atendimento numa edição, senão ele sempre
+  // colidiria consigo mesmo.
   private async verificarConflitoHorario(
     usuarioId: string,
     inicio: Date,
     fim: Date,
+    ignorarId?: string,
   ) {
-    // Margem de busca para trás: cobre sessões já existentes que começaram
-    // antes de `inicio` mas cuja duração ainda avança para dentro do novo
-    // intervalo. 24h é uma folga generosa acima de qualquer duração real de
-    // sessão.
+    // Olha 24h para trás para pegar sessões que começaram antes de `inicio`
+    // mas ainda estão em andamento — folga bem acima de qualquer sessão real.
     const margemBusca = new Date(inicio.getTime() - 24 * 60 * 60 * 1000);
 
     const candidatos = await this.prisma.atendimento.findMany({
@@ -139,6 +143,7 @@ export class AtendimentosService {
         deletedAt: null,
         status: { not: StatusAtendimento.CANCELADO },
         dataAtendimento: { gte: margemBusca, lt: fim },
+        ...(ignorarId ? { id: { not: ignorarId } } : {}),
       },
       select: { dataAtendimento: true, duracaoMinutos: true },
     });
@@ -197,7 +202,22 @@ export class AtendimentosService {
   }
 
   async update(id: string, data: UpdateAtendimentoDto, usuarioId: string) {
-    await this.findOne(id, usuarioId);
+    const atual = await this.findOne(id, usuarioId);
+
+    // Campo omitido no payload mantém o valor atual. Se o atendimento vai
+    // ficar CANCELADO, não ocupa horário e não há o que checar.
+    const statusFinal = data.status ?? atual.status;
+    if (
+      (data.dataAtendimento || data.duracaoMinutos !== undefined) &&
+      statusFinal !== StatusAtendimento.CANCELADO
+    ) {
+      const inicio = data.dataAtendimento
+        ? new Date(data.dataAtendimento)
+        : atual.dataAtendimento;
+      const duracao = data.duracaoMinutos ?? atual.duracaoMinutos;
+      const fim = new Date(inicio.getTime() + duracao * 60000);
+      await this.verificarConflitoHorario(usuarioId, inicio, fim, id);
+    }
 
     const dadosAtualizados: Prisma.AtendimentoUpdateInput = {};
 
@@ -225,8 +245,8 @@ export class AtendimentosService {
     }
   }
 
-  // Troca explícita e auditável de status (confirmar/cancelar manualmente),
-  // separada do update geral — mesmo padrão de AprendentesService.atualizarFase().
+  // Separado do update geral para a troca de status ficar explícita e
+  // auditável — mesmo padrão de AprendentesService.atualizarFase().
   async atualizarStatus(
     id: string,
     status: StatusAtendimento,

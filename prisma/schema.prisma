@@ -134,7 +134,9 @@ model Atividade {
   // Observação Geral (A caixa de texto no final das 5 tentativas)
   observacao String? @db.Text
 
-  // Dados calculados (Mantemos a lógica da ponderada)
+  // Sem uso ativo: nunca são gravados (ficam sempre 0). O score é calculado
+  // na hora a partir do checklist, em src/common/utils/calcular-score.ts.
+  // Mantidos só para evitar uma migration agora.
   percentualAcerto Float @default(0)
   scorePonderado   Float @default(0)
 

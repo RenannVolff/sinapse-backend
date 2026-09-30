@@ -1,27 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { calcularScoreSessao } from '../../common/utils/calcular-score';
 
 @Injectable()
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
   async getDashboardStats(usuarioId: string) {
-    // 1. Datas de hoje para filtrar atendimentos do dia
     const hojeInicio = new Date();
     hojeInicio.setHours(0, 0, 0, 0);
 
     const hojeFim = new Date();
     hojeFim.setHours(23, 59, 59, 999);
 
-    // 2. Executa todas as consultas em paralelo (Performance extrema)
-    const [totalAprendentes, atendimentosHoje, totalAtividades, mediaGeral] =
-      await Promise.all([
-        // A. Conta aprendentes ativos do usuário
+    const [
+      totalAprendentes,
+      atendimentosHoje,
+      totalAtividades,
+      sessoesConcluidas,
+    ] = await Promise.all([
         this.prisma.aprendente.count({
           where: { usuarioId, deletedAt: null },
         }),
 
-        // B. Conta atendimentos agendados para HOJE
         this.prisma.atendimento.count({
           where: {
             aprendente: { usuarioId },
@@ -33,7 +34,8 @@ export class DashboardService {
           },
         }),
 
-        // C. Conta total de atividades realizadas (Checklist marcado)
+        // Conta itens de checklist marcados, não atividades — apesar do card
+        // se chamar "atividades realizadas".
         this.prisma.itemChecklist.count({
           where: {
             realizado: true,
@@ -43,38 +45,64 @@ export class DashboardService {
           },
         }),
 
-        // D. Calcula a média de evolução de TODOS os aprendentes do usuário (Score Ponderado)
-        this.prisma.atividade.aggregate({
+        // Mesmo critério do gráfico de evolução em Relatórios: só sessões
+        // finalizadas entram na média.
+        this.prisma.atendimento.findMany({
           where: {
-            atendimento: { deletedAt: null, aprendente: { usuarioId } },
+            aprendente: { usuarioId },
+            deletedAt: null,
+            concluido: true,
           },
-          _avg: {
-            scorePonderado: true,
+          select: {
+            atividades: {
+              select: {
+                nivelDificuldade: true,
+                itensChecklist: { select: { realizado: true } },
+              },
+            },
           },
         }),
       ]);
 
-    // Retorna o objeto pronto para os Cards
+    // Média por sessão (não por atividade), sobre todos os aprendentes do usuário.
+    const mediaEvolucao =
+      sessoesConcluidas.length > 0
+        ? Math.round(
+            sessoesConcluidas.reduce(
+              (acc, sessao) => acc + calcularScoreSessao(sessao),
+              0,
+            ) / sessoesConcluidas.length,
+          )
+        : 0;
+
     return {
       totalAprendentes,
       atendimentosHoje,
       atividadesRealizadas: totalAtividades,
-      mediaEvolucao: Math.round(mediaGeral._avg.scorePonderado || 0),
+      mediaEvolucao,
     };
   }
 
-  // Gera dados reais para o Gráfico de Barras (Atendimentos nos últimos 7 dias)
+  // Gráfico de barras: atendimentos por dia nos últimos 7 dias
   async getGraficoSemanal(usuarioId: string) {
     const hoje = new Date();
     const seteDiasAtras = new Date();
     seteDiasAtras.setDate(hoje.getDate() - 6);
+    seteDiasAtras.setHours(0, 0, 0, 0);
 
+    const hojeFim = new Date();
+    hojeFim.setHours(23, 59, 59, 999);
+
+    // O agrupamento é só pelo nome do dia ("seg", "ter"): sem o limite
+    // superior, um agendamento da próxima segunda cairia na barra da segunda
+    // passada.
     const atendimentos = await this.prisma.atendimento.findMany({
       where: {
         aprendente: { usuarioId },
         deletedAt: null,
         dataAtendimento: {
           gte: seteDiasAtras,
+          lte: hojeFim,
         },
       },
       select: {
@@ -82,10 +110,9 @@ export class DashboardService {
       },
     });
 
-    // Formata para agrupar por dia (Lógica visual)
+    // Pré-preenche com 0 para dias sem atendimento ainda aparecerem no gráfico
     const mapa = new Map<string, number>();
 
-    // Inicializa os dias com 0
     for (let i = 0; i < 7; i++) {
       const d = new Date();
       d.setDate(hoje.getDate() - i);
@@ -93,7 +120,6 @@ export class DashboardService {
       mapa.set(diaStr, 0);
     }
 
-    // Preenche com os dados do banco
     atendimentos.forEach((at) => {
       const diaStr = at.dataAtendimento.toLocaleDateString('pt-BR', {
         weekday: 'short',
@@ -103,7 +129,7 @@ export class DashboardService {
       }
     });
 
-    // Transforma em array para o gráfico
+    // O mapa foi montado de hoje para trás; reverse deixa em ordem cronológica
     return Array.from(mapa, ([nome, atendimentos]) => ({
       nome,
       atendimentos,

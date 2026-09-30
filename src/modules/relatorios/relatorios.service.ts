@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Prisma, StatusAtendimento } from '@prisma/client'; // Importante para tipagem estrita
+import { Prisma, StatusAtendimento } from '@prisma/client';
+import {
+  calcularPrecisaoSessao,
+  calcularScoreSessao,
+} from '../../common/utils/calcular-score';
 
 export type AgrupamentoFrequencia = 'mensal' | 'trimestral';
 
@@ -15,14 +19,13 @@ const STATUS_AGRUPADOS = [
 export class RelatoriosService {
   constructor(private prisma: PrismaService) {}
 
-  // Gera os dados para o Gráfico de Linha Dupla
+  // Duas séries por sessão (precisão e evolução) para o gráfico de linha dupla
   async gerarGraficoEvolucao(
     aprendenteId: string,
     usuarioId: string,
     inicio?: Date,
     fim?: Date,
   ) {
-    // Construção do objeto WHERE com tipagem do Prisma
     const whereCondition: Prisma.AtendimentoWhereInput = {
       aprendenteId,
       aprendente: { usuarioId },
@@ -30,51 +33,35 @@ export class RelatoriosService {
       concluido: true,
     };
 
-    // Adiciona filtros de data se existirem
     if (inicio || fim) {
       whereCondition.dataAtendimento = {};
       if (inicio) {
-        whereCondition.dataAtendimento.gte = inicio; // Maior ou igual
+        whereCondition.dataAtendimento.gte = inicio;
       }
       if (fim) {
-        whereCondition.dataAtendimento.lte = fim; // Menor ou igual
+        whereCondition.dataAtendimento.lte = fim;
       }
     }
 
-    // Busca no banco
     const atendimentos = await this.prisma.atendimento.findMany({
       where: whereCondition,
       include: {
         atividades: {
           select: {
-            percentualAcerto: true,
-            scorePonderado: true,
+            nivelDificuldade: true,
+            itensChecklist: { select: { realizado: true } },
           },
         },
       },
       orderBy: { dataAtendimento: 'asc' },
     });
 
-    // Processamento matemático
-    return atendimentos.map((at) => {
-      const qtdAtividades = at.atividades.length || 1;
-
-      const somaPrecisao = at.atividades.reduce(
-        (acc, curr) => acc + curr.percentualAcerto,
-        0,
-      );
-      const somaScore = at.atividades.reduce(
-        (acc, curr) => acc + curr.scorePonderado,
-        0,
-      );
-
-      return {
-        data: at.dataAtendimento.toISOString().split('T')[0],
-        precisao: Math.round(somaPrecisao / qtdAtividades),
-        evolucao: Math.round(somaScore / qtdAtividades),
-        sessao: at.tituloSessao,
-      };
-    });
+    return atendimentos.map((at) => ({
+      data: at.dataAtendimento.toISOString().split('T')[0],
+      precisao: calcularPrecisaoSessao(at),
+      evolucao: calcularScoreSessao(at),
+      sessao: at.tituloSessao,
+    }));
   }
 
   // Garante que o aprendente existe e pertence ao usuário logado (multi-tenancy)
@@ -88,8 +75,7 @@ export class RelatoriosService {
     }
   }
 
-  // Dados de cadastro do aprendente usados na identificação do relatório
-  // (fora das métricas anonimizadas — nunca deve ser encaminhado à IA externa)
+  // Identificação do relatório. É PII: nunca deve chegar à IA externa.
   async getIdentificacaoAprendente(aprendenteId: string, usuarioId: string) {
     const aprendente = await this.prisma.aprendente.findFirst({
       where: { id: aprendenteId, usuarioId, deletedAt: null },
@@ -101,7 +87,9 @@ export class RelatoriosService {
     return aprendente;
   }
 
-  // Taxa de frequência/absenteísmo: total de sessões agendadas vs. quantas foram FALTA
+  // Taxa de frequência/absenteísmo: sessões que já deveriam ter acontecido vs.
+  // quantas foram FALTA. Futuras ficam de fora (ainda não tiveram desfecho) e
+  // CANCELADO também: foi decisão do terapeuta, não ausência do aprendente.
   async getTaxaFrequencia(aprendenteId: string, usuarioId: string) {
     await this.validarAprendente(aprendenteId, usuarioId);
 
@@ -113,7 +101,13 @@ export class RelatoriosService {
 
     const [totalAgendadas, totalConcluidas, totalFaltas, totalCancelados] =
       await Promise.all([
-        this.prisma.atendimento.count({ where: whereBase }),
+        this.prisma.atendimento.count({
+          where: {
+            ...whereBase,
+            dataAtendimento: { lt: new Date() },
+            status: { not: StatusAtendimento.CANCELADO },
+          },
+        }),
         this.prisma.atendimento.count({
           where: { ...whereBase, status: StatusAtendimento.CONCLUIDO },
         }),
@@ -205,7 +199,6 @@ export class RelatoriosService {
       }));
   }
 
-  // Combina resumo (taxa) e evolução por período para um aprendente específico
   async getFrequenciaAprendente(
     aprendenteId: string,
     usuarioId: string,
