@@ -1,0 +1,26 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": "..",
+  "roots": ["<rootDir>/test"],
+  "testEnvironment": "node",
+  "testRegex": "\\.e2e-spec\\.ts$",
+  "transform": {
+    "node_modules[\\\\/](@scure|@noble)[\\\\/].+\\.js$": [
+      "ts-jest",
+      {
+        "tsconfig": {
+          "allowJs": true,
+          "module": "commonjs",
+          "moduleResolution": "node",
+          "isolatedModules": true
+        },
+        "diagnostics": false
+      }
+    ],
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "transformIgnorePatterns": ["^(?!.*[\\\\/](@scure|@noble)[\\\\/]).*[\\\\/]node_modules[\\\\/]"],
+  "globalSetup": "<rootDir>/test/setup/global-setup.ts",
+  "setupFiles": ["<rootDir>/test/setup/ambiente.ts"],
+  "testTimeout": 30000
+}
