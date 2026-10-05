@@ -33,7 +33,7 @@ export class CreateAtendimentoDto {
   // que garante a margem de busca de verificarConflitoHorario().
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(1, { message: 'A duração mínima é de 1 minuto.' })
   @Max(1440, { message: 'A duração máxima é de 24h (1440 minutos).' })
   duracaoMinutos?: number;
 
@@ -59,7 +59,7 @@ export class UpdateAtendimentoDto {
 
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(1, { message: 'A duração mínima é de 1 minuto.' })
   @Max(1440, { message: 'A duração máxima é de 24h (1440 minutos).' })
   duracaoMinutos?: number;
 

@@ -1,11 +1,6 @@
-import {
-  IsString,
-  IsEmail,
-  IsOptional,
-  MinLength,
-  Matches,
-} from 'class-validator';
+import { IsString, IsEmail, IsOptional } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { SenhaForte } from '../../../common/validators/senha-forte.decorator';
 
 export class UpdateUsuarioDto {
   @ApiPropertyOptional({
@@ -26,11 +21,6 @@ export class UpdateUsuarioDto {
 
   @ApiPropertyOptional({ description: 'Nova senha de acesso', minLength: 6 })
   @IsOptional()
-  @IsString({ message: 'A senha deve ser um texto válido.' })
-  @MinLength(8, { message: 'A senha deve conter no mínimo 8 caracteres.' })
-  @Matches(/((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
-    message:
-      'A senha deve conter pelo menos 1 letra maiúscula, 1 minúscula, 1 número e 1 caractere especial',
-  })
+  @SenhaForte()
   senha?: string;
 }

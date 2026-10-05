@@ -10,7 +10,7 @@ export function SenhaForte() {
     MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres' }),
     Matches(/((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
       message:
-        'A senha deve conter pelo menos 1 letra maiúscula, 1 minúscula, 1 número e 1 caractere especial',
+        'A senha deve ter no mínimo 8 caracteres, com 1 letra maiúscula, 1 minúscula e 1 número ou símbolo',
     }),
   );
 }
