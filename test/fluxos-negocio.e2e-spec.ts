@@ -768,4 +768,469 @@ describe('C. Fluxos de negócio com persistência', () => {
       expect(noBanco!.deletedAt).toBeInstanceOf(Date);
     });
   });
+
+  describe('Soft delete do aprendente propaga para os PEIs', () => {
+    let t: Terapeuta;
+
+    beforeAll(async () => {
+      t = await criarTerapeuta(ctx);
+    });
+
+    const criarPei = async (aprendenteId: string, objetivos: string) =>
+      (
+        await ctx.api
+          .post('/peis')
+          .set(bearer(t.token))
+          .send({
+            aprendenteId,
+            dificuldades: 'Dificuldades',
+            objetivos,
+            estrategias: 'Estratégias',
+            dataInicio: '2026-03-01',
+          })
+          .expect(201)
+      ).body as { id: string };
+
+    it('ao excluir o aprendente, seus PEIs somem da listagem, dão 404 ao abrir e continuam no banco com deletedAt', async () => {
+      const excluido = await criarAprendente(ctx, t, {
+        nomeCompleto: 'Elisa Excluída',
+      });
+      const mantido = await criarAprendente(ctx, t, {
+        nomeCompleto: 'Fábio Mantido',
+      });
+      const pei1 = await criarPei(excluido.id, 'Plano 1');
+      const pei2 = await criarPei(excluido.id, 'Plano 2');
+      const peiMantido = await criarPei(mantido.id, 'Plano do outro');
+
+      await ctx.api
+        .delete(`/aprendentes/${excluido.id}`)
+        .set(bearer(t.token))
+        .expect(204);
+
+      const lista = await ctx.api.get('/peis').set(bearer(t.token)).expect(200);
+      expect(lista.body.map((p: { id: string }) => p.id)).toEqual([
+        peiMantido.id,
+      ]);
+      const filtrada = await ctx.api
+        .get('/peis')
+        .query({ aprendenteId: excluido.id })
+        .set(bearer(t.token))
+        .expect(200);
+      expect(filtrada.body).toEqual([]);
+
+      for (const pei of [pei1, pei2]) {
+        await ctx.api.get(`/peis/${pei.id}`).set(bearer(t.token)).expect(404);
+        await ctx.api
+          .patch(`/peis/${pei.id}`)
+          .set(bearer(t.token))
+          .send({ objetivos: 'Editado' })
+          .expect(404);
+        await ctx.api
+          .delete(`/peis/${pei.id}`)
+          .set(bearer(t.token))
+          .expect(404);
+      }
+
+      const aprendenteNoBanco = await ctx.prisma.aprendente.findUniqueOrThrow({
+        where: { id: excluido.id },
+      });
+      const peisNoBanco = await ctx.prisma.pEI.findMany({
+        where: { aprendenteId: excluido.id },
+      });
+      expect(peisNoBanco).toHaveLength(2);
+      for (const pei of peisNoBanco) {
+        // Mesma transação: o PEI recebe o mesmo carimbo de exclusão do aprendente.
+        expect(pei.deletedAt).toEqual(aprendenteNoBanco.deletedAt);
+        expect(pei.objetivos).toMatch(/^Plano [12]$/);
+      }
+
+      const mantidoNoBanco = await ctx.prisma.pEI.findUniqueOrThrow({
+        where: { id: peiMantido.id },
+      });
+      expect(mantidoNoBanco.deletedAt).toBeNull();
+    });
+
+    it('um PEI excluído antes do aprendente mantém a data de exclusão original', async () => {
+      const aprendente = await criarAprendente(ctx, t);
+      const pei = await criarPei(aprendente.id, 'Plano antigo');
+      await ctx.api.delete(`/peis/${pei.id}`).set(bearer(t.token)).expect(204);
+      const excluidoAntes = (
+        await ctx.prisma.pEI.findUniqueOrThrow({ where: { id: pei.id } })
+      ).deletedAt;
+
+      await ctx.api
+        .delete(`/aprendentes/${aprendente.id}`)
+        .set(bearer(t.token))
+        .expect(204);
+
+      const depois = await ctx.prisma.pEI.findUniqueOrThrow({
+        where: { id: pei.id },
+      });
+      expect(depois.deletedAt).toEqual(excluidoAntes);
+    });
+  });
+
+  describe('Reativação de atendimento CANCELADO checa conflito de horário', () => {
+    let t: Terapeuta;
+    let aprendenteId: string;
+    let dia = 0;
+
+    beforeAll(async () => {
+      t = await criarTerapeuta(ctx);
+      aprendenteId = (await criarAprendente(ctx, t)).id;
+    });
+
+    // X é cancelado e o mesmo horário é ocupado por Y. Cada chamada usa um
+    // dia novo (a partir de fevereiro, para não colidir com os outros blocos).
+    async function cancelarEOcupar() {
+      dia++;
+      const horario = horarioFuturo(31 + dia, 10);
+      const x = await criarAtendimento(ctx, t, aprendenteId, {
+        dataAtendimento: horario,
+      });
+      await ctx.api
+        .patch(`/atendimentos/${x.id}/status`)
+        .set(bearer(t.token))
+        .send({ status: 'CANCELADO' })
+        .expect(200);
+      const y = await criarAtendimento(ctx, t, aprendenteId, {
+        dataAtendimento: horario,
+      });
+      return { x, y, horario };
+    }
+
+    it.each([
+      'AGENDADO',
+      'AGUARDANDO_CONFIRMACAO',
+      'CONFIRMADO',
+      'EM_ANDAMENTO',
+      'CONCLUIDO',
+      'FALTA',
+    ])(
+      'PATCH /atendimentos/:id/status de CANCELADO para %s com o horário ocupado responde 400 e mantém CANCELADO',
+      async (status) => {
+        const { x } = await cancelarEOcupar();
+        const res = await ctx.api
+          .patch(`/atendimentos/${x.id}/status`)
+          .set(bearer(t.token))
+          .send({ status })
+          .expect(400);
+        expect(res.body.message).toBe(MENSAGEM_CONFLITO);
+
+        const noBanco = await ctx.prisma.atendimento.findUniqueOrThrow({
+          where: { id: x.id },
+        });
+        expect(noBanco.status).toBe('CANCELADO');
+      },
+    );
+
+    it('PATCH /atendimentos/:id mudando só o status de CANCELADO para AGENDADO com o horário ocupado responde 400', async () => {
+      const { x } = await cancelarEOcupar();
+      const res = await ctx.api
+        .patch(`/atendimentos/${x.id}`)
+        .set(bearer(t.token))
+        .send({ status: 'AGENDADO' })
+        .expect(400);
+      expect(res.body.message).toBe(MENSAGEM_CONFLITO);
+
+      const noBanco = await ctx.prisma.atendimento.findUniqueOrThrow({
+        where: { id: x.id },
+      });
+      expect(noBanco.status).toBe('CANCELADO');
+    });
+
+    it('reativar com o horário livre continua permitido (pelas duas rotas)', async () => {
+      const primeiro = await cancelarEOcupar();
+      // Libera o horário cancelando Y.
+      await ctx.api
+        .patch(`/atendimentos/${primeiro.y.id}/status`)
+        .set(bearer(t.token))
+        .send({ status: 'CANCELADO' })
+        .expect(200);
+      await ctx.api
+        .patch(`/atendimentos/${primeiro.x.id}/status`)
+        .set(bearer(t.token))
+        .send({ status: 'CONFIRMADO' })
+        .expect(200);
+
+      const segundo = await cancelarEOcupar();
+      await ctx.api
+        .patch(`/atendimentos/${segundo.y.id}`)
+        .set(bearer(t.token))
+        .send({ status: 'CANCELADO' })
+        .expect(200);
+      await ctx.api
+        .patch(`/atendimentos/${segundo.x.id}`)
+        .set(bearer(t.token))
+        .send({ status: 'AGENDADO' })
+        .expect(200);
+    });
+
+    it('reativar movendo para um horário livre no mesmo PATCH é permitido', async () => {
+      const { x } = await cancelarEOcupar();
+      const res = await ctx.api
+        .patch(`/atendimentos/${x.id}`)
+        .set(bearer(t.token))
+        .send({
+          status: 'AGENDADO',
+          dataAtendimento: horarioFuturo(31 + dia, 15),
+        })
+        .expect(200);
+      expect(res.body.status).toBe('AGENDADO');
+    });
+
+    it('mudar entre status que já ocupam horário não dispara conflito com o próprio atendimento', async () => {
+      const a = await criarAtendimento(ctx, t, aprendenteId, {
+        dataAtendimento: horarioFuturo(60, 10),
+      });
+      for (const status of ['CONFIRMADO', 'EM_ANDAMENTO', 'CONCLUIDO']) {
+        await ctx.api
+          .patch(`/atendimentos/${a.id}/status`)
+          .set(bearer(t.token))
+          .send({ status })
+          .expect(200);
+      }
+      await ctx.api
+        .patch(`/atendimentos/${a.id}`)
+        .set(bearer(t.token))
+        .send({ status: 'CONFIRMADO' })
+        .expect(200);
+    });
+
+    it('nunca ficam dois atendimentos ativos no mesmo horário após as tentativas de reativação', async () => {
+      const ativosPorHorario = await ctx.prisma.atendimento.groupBy({
+        by: ['dataAtendimento'],
+        where: {
+          aprendente: { usuarioId: t.id },
+          status: { not: 'CANCELADO' },
+          deletedAt: null,
+        },
+        _count: { _all: true },
+      });
+      expect(ativosPorHorario.length).toBeGreaterThan(0);
+      for (const grupo of ativosPorHorario) expect(grupo._count._all).toBe(1);
+    });
+  });
+
+  describe('Validação de atividades e checklist', () => {
+    let t: Terapeuta;
+    let atendimentoId: string;
+    let itemId: string;
+
+    const MSG_NIVEL =
+      'O nível de dificuldade deve ser um número inteiro de 1 a 5.';
+    const MSG_TITULO = 'O título da atividade é obrigatório.';
+    const MSG_ATENDIMENTO = 'O identificador do atendimento é obrigatório.';
+    const MSG_ATENDIMENTO_INVALIDO =
+      'O identificador do atendimento é inválido.';
+    const MSG_REALIZADO = 'O campo realizado deve ser verdadeiro ou falso.';
+
+    beforeAll(async () => {
+      t = await criarTerapeuta(ctx);
+      const aprendente = await criarAprendente(ctx, t);
+      atendimentoId = (
+        await criarAtendimento(ctx, t, aprendente.id, {
+          dataAtendimento: horarioFuturo(70, 10),
+        })
+      ).id;
+      const atividade = await ctx.api
+        .post('/atividades')
+        .set(bearer(t.token))
+        .send({ atendimentoId, titulo: 'Válida', nivelDificuldade: 3 })
+        .expect(201);
+      itemId = (
+        await ctx.prisma.itemChecklist.findFirstOrThrow({
+          where: { atividadeId: atividade.body.id },
+        })
+      ).id;
+    });
+
+    it.each([
+      ['nivelDificuldade 0', { nivelDificuldade: 0 }, MSG_NIVEL],
+      ['nivelDificuldade -3', { nivelDificuldade: -3 }, MSG_NIVEL],
+      ['nivelDificuldade 99', { nivelDificuldade: 99 }, MSG_NIVEL],
+      ['nivelDificuldade 6', { nivelDificuldade: 6 }, MSG_NIVEL],
+      ['nivelDificuldade "abc"', { nivelDificuldade: 'abc' }, MSG_NIVEL],
+      ['nivelDificuldade 2.5', { nivelDificuldade: 2.5 }, MSG_NIVEL],
+      ['nivelDificuldade ausente', { nivelDificuldade: undefined }, MSG_NIVEL],
+      ['titulo ausente', { titulo: undefined }, MSG_TITULO],
+      ['titulo vazio', { titulo: '' }, MSG_TITULO],
+      ['atendimentoId ausente', { atendimentoId: undefined }, MSG_ATENDIMENTO],
+      [
+        'atendimentoId que não é UUID',
+        { atendimentoId: 'abc' },
+        MSG_ATENDIMENTO_INVALIDO,
+      ],
+    ])(
+      'POST /atividades com %s responde 400 em português e não grava nada',
+      async (_caso, alteracao, mensagem) => {
+        const corpo: Record<string, unknown> = {
+          atendimentoId,
+          titulo: 'Atividade',
+          nivelDificuldade: 2,
+          ...alteracao,
+        };
+        const antes = await ctx.prisma.atividade.count();
+        const res = await ctx.api
+          .post('/atividades')
+          .set(bearer(t.token))
+          .send(corpo)
+          .expect(400);
+        expect(res.body.message).toContain(mensagem);
+        expect(await ctx.prisma.atividade.count()).toBe(antes);
+      },
+    );
+
+    it('POST /atividades com campo fora do DTO responde 400', async () => {
+      await ctx.api
+        .post('/atividades')
+        .set(bearer(t.token))
+        .send({ atendimentoId, titulo: 'x', nivelDificuldade: 2, hack: 1 })
+        .expect(400);
+    });
+
+    it.each([1, 5])(
+      'POST /atividades aceita os limites do intervalo (nível %i)',
+      async (nivel) => {
+        await ctx.api
+          .post('/atividades')
+          .set(bearer(t.token))
+          .send({
+            atendimentoId,
+            titulo: `Nível ${nivel}`,
+            nivelDificuldade: nivel,
+          })
+          .expect(201);
+      },
+    );
+
+    it.each([
+      ['realizado "sim"', { realizado: 'sim' }],
+      ['realizado 1', { realizado: 1 }],
+      ['realizado null', { realizado: null }],
+      ['realizado ausente', {}],
+    ])(
+      'PATCH /atividades/checklist/:id com %s responde 400 em português e não altera o item',
+      async (_caso, corpo) => {
+        const res = await ctx.api
+          .patch(`/atividades/checklist/${itemId}`)
+          .set(bearer(t.token))
+          .send(corpo)
+          .expect(400);
+        expect(res.body.message).toContain(MSG_REALIZADO);
+        const item = await ctx.prisma.itemChecklist.findUniqueOrThrow({
+          where: { id: itemId },
+        });
+        expect(item.realizado).toBe(false);
+      },
+    );
+
+    it('PATCH /atividades/checklist/:id com campo fora do DTO responde 400', async () => {
+      await ctx.api
+        .patch(`/atividades/checklist/${itemId}`)
+        .set(bearer(t.token))
+        .send({ realizado: true, hack: 1 })
+        .expect(400);
+    });
+  });
+
+  describe('Parâmetros de data inválidos respondem 400', () => {
+    let t: Terapeuta;
+    let aprendenteId: string;
+
+    const MSG_MES = 'O mês deve ser um número inteiro de 1 a 12.';
+    const MSG_ANO = 'O ano deve ser um número inteiro entre 2000 e 2100.';
+    const MSG_INICIO =
+      'A data de início deve ser uma data válida (AAAA-MM-DD).';
+    const MSG_FIM = 'A data de fim deve ser uma data válida (AAAA-MM-DD).';
+
+    beforeAll(async () => {
+      t = await criarTerapeuta(ctx);
+      aprendenteId = (await criarAprendente(ctx, t)).id;
+    });
+
+    const semMensagemEmIngles = (message: unknown) =>
+      expect(JSON.stringify(message)).not.toMatch(/must|should|property/i);
+
+    it.each([
+      ['sem mes e ano', {}, MSG_MES],
+      ['sem ano', { mes: 3 }, MSG_ANO],
+      ['com mes "abc"', { mes: 'abc', ano: 2027 }, MSG_MES],
+      ['com mes 13', { mes: 13, ano: 2027 }, MSG_MES],
+      ['com ano "abc"', { mes: 3, ano: 'abc' }, MSG_ANO],
+    ])(
+      'GET /atendimentos/calendario %s responde 400 em português',
+      async (_caso, query, mensagem) => {
+        const res = await ctx.api
+          .get('/atendimentos/calendario')
+          .query(query)
+          .set(bearer(t.token))
+          .expect(400);
+        expect(res.body.message).toContain(mensagem);
+        semMensagemEmIngles(res.body.message);
+      },
+    );
+
+    it('GET /atendimentos/calendario com mes e ano válidos responde 200 (controle)', async () => {
+      await ctx.api
+        .get('/atendimentos/calendario')
+        .query({ mes: 3, ano: 2027 })
+        .set(bearer(t.token))
+        .expect(200);
+    });
+
+    it.each([
+      ['inicio=abc', { inicio: 'abc', fim: '2026-12-31' }, MSG_INICIO],
+      ['fim=abc', { inicio: '2026-01-01', fim: 'abc' }, MSG_FIM],
+      ['sem inicio', { fim: '2026-12-31' }, MSG_INICIO],
+      ['sem fim', { inicio: '2026-01-01' }, MSG_FIM],
+    ])(
+      'GET /aprendentes/:id/relatorio-ia com %s responde 400 em português',
+      async (_caso, query, mensagem) => {
+        const res = await ctx.api
+          .get(`/aprendentes/${aprendenteId}/relatorio-ia`)
+          .query(query)
+          .set(bearer(t.token))
+          .expect(400);
+        expect(res.body.message).toContain(mensagem);
+        semMensagemEmIngles(res.body.message);
+      },
+    );
+
+    it('GET /aprendentes/:id/relatorio-ia com datas válidas responde 200 (controle)', async () => {
+      await ctx.api
+        .get(`/aprendentes/${aprendenteId}/relatorio-ia`)
+        .query({ inicio: '2026-01-01', fim: '2026-12-31' })
+        .set(bearer(t.token))
+        .expect(200);
+    });
+
+    it.each([
+      ['inicio=abc', { inicio: 'abc' }, MSG_INICIO],
+      ['fim=abc', { fim: 'abc' }, MSG_FIM],
+    ])(
+      'GET /relatorios/evolucao/:id com %s responde 400 em português',
+      async (_caso, query, mensagem) => {
+        const res = await ctx.api
+          .get(`/relatorios/evolucao/${aprendenteId}`)
+          .query(query)
+          .set(bearer(t.token))
+          .expect(400);
+        expect(res.body.message).toContain(mensagem);
+        semMensagemEmIngles(res.body.message);
+      },
+    );
+
+    it('GET /relatorios/evolucao/:id sem datas (opcionais) ou com datas válidas responde 200 (controle)', async () => {
+      await ctx.api
+        .get(`/relatorios/evolucao/${aprendenteId}`)
+        .set(bearer(t.token))
+        .expect(200);
+      await ctx.api
+        .get(`/relatorios/evolucao/${aprendenteId}`)
+        .query({ inicio: '2026-01-01', fim: '2026-12-31' })
+        .set(bearer(t.token))
+        .expect(200);
+    });
+  });
 });

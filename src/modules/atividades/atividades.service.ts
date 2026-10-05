@@ -1,18 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CreateAtividadeDto } from './dto/create-atividade.dto';
 
 @Injectable()
 export class AtividadesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(
-    data: {
-      atendimentoId: string;
-      titulo: string;
-      nivelDificuldade: number;
-    },
-    usuarioId: string,
-  ) {
+  async create(data: CreateAtividadeDto, usuarioId: string) {
     const atendimento = await this.prisma.atendimento.findFirst({
       where: {
         id: data.atendimentoId,
@@ -28,6 +22,7 @@ export class AtividadesService {
         atendimentoId: data.atendimentoId,
         titulo: data.titulo,
         nivelDificuldade: data.nivelDificuldade,
+        observacao: data.observacao,
         itensChecklist: {
           create: [
             { descricao: '1ª Tentativa', realizado: false },

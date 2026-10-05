@@ -62,4 +62,11 @@ describe('@SenhaForte', () => {
   it('rejeita valor que não é texto', async () => {
     expect((await validarSenha(12345678)).length).toBeGreaterThan(0);
   });
+
+  it('rejeita valor que não é texto com mensagem em português', async () => {
+    const erros = await validarSenha(12345678);
+
+    expect(erros).toContain('A senha deve ser um texto');
+    expect(erros.join(' ')).not.toMatch(/must be a string/);
+  });
 });

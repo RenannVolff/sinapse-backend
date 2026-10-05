@@ -74,6 +74,10 @@ export class AprendentesService {
         where: { aprendenteId: id, deletedAt: null },
         data: { deletedAt: agora },
       }),
+      this.prisma.pEI.updateMany({
+        where: { aprendenteId: id, deletedAt: null },
+        data: { deletedAt: agora },
+      }),
     ]);
   }
 

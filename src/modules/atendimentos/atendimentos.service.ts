@@ -17,6 +17,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { IsDateNotInPast } from '../../common/validators/is-date-not-in-past.validator';
 
 export class CreateAtendimentoDto {
@@ -78,6 +79,22 @@ export class UpdateAtendimentoDto {
   @IsOptional()
   @IsBoolean()
   concluido?: boolean;
+}
+
+// Query string chega como texto: @Type converte para número antes de
+// validar ("abc" vira NaN e é recusado pelo @IsInt).
+export class CalendarioQueryDto {
+  @Type(() => Number)
+  @IsInt({ message: 'O mês deve ser um número inteiro de 1 a 12.' })
+  @Min(1, { message: 'O mês deve ser um número inteiro de 1 a 12.' })
+  @Max(12, { message: 'O mês deve ser um número inteiro de 1 a 12.' })
+  mes!: number;
+
+  @Type(() => Number)
+  @IsInt({ message: 'O ano deve ser um número inteiro entre 2000 e 2100.' })
+  @Min(2000, { message: 'O ano deve ser um número inteiro entre 2000 e 2100.' })
+  @Max(2100, { message: 'O ano deve ser um número inteiro entre 2000 e 2100.' })
+  ano!: number;
 }
 
 export class UpdateStatusAtendimentoDto {
@@ -205,10 +222,16 @@ export class AtendimentosService {
     const atual = await this.findOne(id, usuarioId);
 
     // Campo omitido no payload mantém o valor atual. Se o atendimento vai
-    // ficar CANCELADO, não ocupa horário e não há o que checar.
+    // ficar CANCELADO, não ocupa horário e não há o que checar. Reativar um
+    // CANCELADO volta a ocupar o horário, mesmo sem mudar data/duração.
     const statusFinal = data.status ?? atual.status;
+    const reativando =
+      atual.status === StatusAtendimento.CANCELADO &&
+      statusFinal !== StatusAtendimento.CANCELADO;
     if (
-      (data.dataAtendimento || data.duracaoMinutos !== undefined) &&
+      (data.dataAtendimento ||
+        data.duracaoMinutos !== undefined ||
+        reativando) &&
       statusFinal !== StatusAtendimento.CANCELADO
     ) {
       const inicio = data.dataAtendimento
@@ -252,7 +275,24 @@ export class AtendimentosService {
     status: StatusAtendimento,
     usuarioId: string,
   ) {
-    await this.findOne(id, usuarioId);
+    const atual = await this.findOne(id, usuarioId);
+
+    // CANCELADO não ocupa horário; ao sair dele, o horário pode já ter sido
+    // tomado por outro atendimento.
+    if (
+      atual.status === StatusAtendimento.CANCELADO &&
+      status !== StatusAtendimento.CANCELADO
+    ) {
+      const fim = new Date(
+        atual.dataAtendimento.getTime() + atual.duracaoMinutos * 60000,
+      );
+      await this.verificarConflitoHorario(
+        usuarioId,
+        atual.dataAtendimento,
+        fim,
+        id,
+      );
+    }
 
     return this.prisma.atendimento.update({
       where: { id },

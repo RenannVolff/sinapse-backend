@@ -13,6 +13,7 @@ import {
 
 import {
   AtendimentosService,
+  CalendarioQueryDto,
   CreateAtendimentoDto,
   UpdateAtendimentoDto,
   UpdateStatusAtendimentoDto,
@@ -34,13 +35,12 @@ export class AtendimentosController {
 
   @Get('calendario')
   findAll(
-    @Query('mes') mes: string,
-    @Query('ano') ano: string,
+    @Query() query: CalendarioQueryDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.atendimentosService.findAllCalendario(
-      Number(mes),
-      Number(ano),
+      query.mes,
+      query.ano,
       user.id,
     );
   }

@@ -37,7 +37,7 @@ export class PeiService {
   findAll(usuarioId: string, aprendenteId?: string) {
     return this.prisma.pEI.findMany({
       where: {
-        aprendente: { usuarioId },
+        aprendente: { usuarioId, deletedAt: null },
         deletedAt: null,
         ...(aprendenteId ? { aprendenteId } : {}),
       },
@@ -47,7 +47,11 @@ export class PeiService {
 
   async findOne(id: string, usuarioId: string) {
     const pei = await this.prisma.pEI.findFirst({
-      where: { id, aprendente: { usuarioId }, deletedAt: null },
+      where: {
+        id,
+        aprendente: { usuarioId, deletedAt: null },
+        deletedAt: null,
+      },
     });
     if (!pei) throw new NotFoundException('PEI não encontrado.');
     return pei;

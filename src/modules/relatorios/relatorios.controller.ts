@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { RelatoriosService } from './relatorios.service';
 import type { AgrupamentoFrequencia } from './relatorios.service';
+import { EvolucaoQueryDto } from './dto/evolucao-query.dto';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
@@ -34,12 +35,11 @@ export class RelatoriosController {
   getEvolucao(
     @Param('aprendenteId') aprendenteId: string,
     @CurrentUser() user: AuthenticatedUser,
-    @Query('inicio') inicio?: string,
-    @Query('fim') fim?: string,
+    @Query() query: EvolucaoQueryDto,
   ) {
-    // Conversão segura de String para Date (ou undefined)
-    const dataInicio = inicio ? new Date(inicio) : undefined;
-    const dataFim = fim ? new Date(fim) : undefined;
+    // Datas já validadas pelo EvolucaoQueryDto (ausentes = sem filtro)
+    const dataInicio = query.inicio ? new Date(query.inicio) : undefined;
+    const dataFim = query.fim ? new Date(query.fim) : undefined;
 
     return this.service.gerarGraficoEvolucao(
       aprendenteId,

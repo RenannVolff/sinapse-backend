@@ -6,7 +6,7 @@ import { IsString, Matches, MinLength } from 'class-validator';
 // senha (cadastro, redefinição), pra não duplicar a regra.
 export function SenhaForte() {
   return applyDecorators(
-    IsString(),
+    IsString({ message: 'A senha deve ser um texto' }),
     MinLength(8, { message: 'A senha deve ter no mínimo 8 caracteres' }),
     Matches(/((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-z]).*$/, {
       message:

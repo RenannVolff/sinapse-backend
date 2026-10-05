@@ -240,6 +240,24 @@ describe('E. Proteção', () => {
       );
       expect(bot.body.usuario.email).toBe(t.email);
       expect(bot.body.token.split('.')).toHaveLength(3);
+
+      // Mesmos tipos de valor do login real, inclusive um nome plausível
+      // (nome e sobrenome) em vez de vazio.
+      for (const campo of Object.keys(real.body.usuario)) {
+        expect(typeof bot.body.usuario[campo]).toBe(
+          typeof real.body.usuario[campo],
+        );
+      }
+      expect(bot.body.usuario.nome).toMatch(
+        /^[A-ZÀ-Ú][a-zà-ú]+ [A-ZÀ-Ú][a-zà-ú]+$/,
+      );
+
+      // Como numa conta real, o mesmo e-mail devolve sempre o mesmo nome.
+      const botDeNovo = await ctx.api
+        .post('/auth/login')
+        .send({ email: t.email, senha: 'Outra@123', website: 'x' })
+        .expect(200);
+      expect(botDeNovo.body.usuario.nome).toBe(bot.body.usuario.nome);
       expect(bot.headers['content-type']).toBe(real.headers['content-type']);
       expect(JSON.stringify(bot.body)).not.toMatch(/honeypot|bloque/i);
 

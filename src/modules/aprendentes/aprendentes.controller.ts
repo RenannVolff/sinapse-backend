@@ -15,6 +15,7 @@ import { Throttle } from '@nestjs/throttler';
 import { AprendentesService } from './aprendentes.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
 import { UpdateFaseAprendenteDto } from './dto/update-fase-aprendente.dto';
+import { RelatorioIaQueryDto } from './dto/relatorio-ia-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
@@ -87,14 +88,13 @@ export class AprendentesController {
   })
   getRelatorioCompleto(
     @Param('id') id: string,
-    @Query('inicio') inicio: string,
-    @Query('fim') fim: string,
+    @Query() query: RelatorioIaQueryDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.aprendentesService.gerarRelatorioInteligente(
       id,
-      inicio,
-      fim,
+      query.inicio,
+      query.fim,
       user.id,
     );
   }

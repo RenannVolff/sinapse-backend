@@ -19,7 +19,7 @@ export class UpdateUsuarioDto {
   @IsEmail({}, { message: 'O e-mail fornecido não tem um formato válido.' })
   email?: string;
 
-  @ApiPropertyOptional({ description: 'Nova senha de acesso', minLength: 6 })
+  @ApiPropertyOptional({ description: 'Nova senha de acesso', minLength: 8 })
   @IsOptional()
   @SenhaForte()
   senha?: string;

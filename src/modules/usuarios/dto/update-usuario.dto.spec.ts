@@ -32,3 +32,19 @@ describe('UpdateUsuarioDto.senha', () => {
     expect(await errosDaSenha({ nome: 'Novo nome' })).toEqual([]);
   });
 });
+
+// Chave em que o @ApiProperty grava os metadados (DECORATORS.API_MODEL_PROPERTIES
+// do @nestjs/swagger, que não é exportado pelo pacote).
+const METADADOS_SWAGGER = 'swagger/apiModelProperties';
+
+describe('UpdateUsuarioDto — documentação Swagger', () => {
+  it('documenta senha com minLength 8, igual à regra @SenhaForte', () => {
+    const propriedade = Reflect.getMetadata(
+      METADADOS_SWAGGER,
+      UpdateUsuarioDto.prototype,
+      'senha',
+    ) as { minLength?: number };
+
+    expect(propriedade.minLength).toBe(8);
+  });
+});
