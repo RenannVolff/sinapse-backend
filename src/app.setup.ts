@@ -2,6 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { json, NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
+import { origensPermitidasCors } from './common/config/origens-frontend';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 // Configuração compartilhada entre o main.ts e a suíte e2e (test/), para que
@@ -45,5 +46,8 @@ export function configureApp(app: NestExpressApplication): void {
   // Nunca vaza erro interno do Prisma/Postgres ao cliente
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  app.enableCors();
+  // Só as origens de FRONTEND_URL (+ Vite local fora de produção). Origem
+  // fora da lista recebe a resposta sem Access-Control-Allow-Origin, e o
+  // navegador bloqueia a leitura.
+  app.enableCors({ origin: origensPermitidasCors() });
 }

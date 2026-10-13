@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
+import { urlFrontendPrincipal } from '../../common/config/origens-frontend';
 
 @Injectable()
 export class EmailService {
@@ -32,7 +33,7 @@ export class EmailService {
       return;
     }
 
-    const link = `${process.env.FRONTEND_URL}/verificar-email?token=${token}`;
+    const link = `${urlFrontendPrincipal()}/verificar-email?token=${token}`;
 
     try {
       await this.transporter.sendMail({
@@ -60,7 +61,7 @@ export class EmailService {
       return;
     }
 
-    const link = `${process.env.FRONTEND_URL}/redefinir-senha?token=${token}`;
+    const link = `${urlFrontendPrincipal()}/redefinir-senha?token=${token}`;
 
     try {
       await this.transporter.sendMail({

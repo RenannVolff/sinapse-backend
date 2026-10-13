@@ -53,6 +53,7 @@ export interface ClienteHttp {
   post: (url: string) => request.Test;
   patch: (url: string) => request.Test;
   delete: (url: string) => request.Test;
+  options: (url: string) => request.Test;
 }
 
 let contadorIp = 0;
@@ -79,5 +80,6 @@ export function clienteHttp(
     post: (url) => comIp(request(servidor).post(url)),
     patch: (url) => comIp(request(servidor).patch(url)),
     delete: (url) => comIp(request(servidor).delete(url)),
+    options: (url) => comIp(request(servidor).options(url)),
   };
 }
