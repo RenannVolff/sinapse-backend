@@ -10,13 +10,19 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { PeiService } from './pei.service';
 import { CreatePeiDto } from './dto/create-pei.dto';
 import { UpdatePeiDto } from './dto/update-pei.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
+@ApiBearerAuth()
 @ApiTags('PEI')
 @Controller('peis')
 export class PeiController {
@@ -32,7 +38,9 @@ export class PeiController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lista os PEIs, opcionalmente filtrados por aprendente' })
+  @ApiOperation({
+    summary: 'Lista os PEIs, opcionalmente filtrados por aprendente',
+  })
   @ApiQuery({ name: 'aprendenteId', required: false })
   findAll(
     @CurrentUser() user: AuthenticatedUser,

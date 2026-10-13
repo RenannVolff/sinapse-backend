@@ -6,6 +6,7 @@ import {
   Param,
   ForbiddenException,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { UsuariosService } from './usuarios.service';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
@@ -18,6 +19,7 @@ import {
   honeypotAcionado,
 } from '../../common/honeypot/honeypot';
 
+@ApiTags('Usuários')
 @Controller('usuarios')
 export class UsuariosController {
   constructor(private readonly usuariosService: UsuariosService) {}
@@ -25,6 +27,7 @@ export class UsuariosController {
   @IsPublic() //
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
   @Post()
+  @ApiOperation({ summary: 'Cadastra um novo profissional' })
   create(@Body() createUsuarioDto: CreateUsuarioDto) {
     if (honeypotAcionado(createUsuarioDto.website, 'POST /usuarios')) {
       return cadastroFalso(createUsuarioDto.nome, createUsuarioDto.email);
@@ -32,7 +35,9 @@ export class UsuariosController {
     return this.usuariosService.create(createUsuarioDto);
   }
 
+  @ApiBearerAuth()
   @Patch(':id')
+  @ApiOperation({ summary: 'Atualiza os dados da própria conta' })
   update(
     @Param('id') id: string,
     @Body() updateUsuarioDto: UpdateUsuarioDto,

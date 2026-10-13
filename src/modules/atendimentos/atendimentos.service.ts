@@ -18,13 +18,23 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateNotInPast } from '../../common/validators/is-date-not-in-past.validator';
 
 export class CreateAtendimentoDto {
+  @ApiProperty({
+    description: 'ID do Aprendente atendido',
+    example: '3f2b8c1e-7a4d-4e9b-9c0a-1d2e3f4a5b6c',
+  })
   @IsNotEmpty({ message: 'O identificador do aprendente é obrigatório.' })
   @IsString()
   aprendenteId!: string;
 
+  @ApiProperty({
+    description: 'Data e hora da sessão (ISO 8601, não pode estar no passado)',
+    example: '2026-11-10T14:00:00.000Z',
+    type: String,
+  })
   @IsNotEmpty({ message: 'A data do atendimento é obrigatória.' })
   @IsDateString({}, { message: 'Data inválida' })
   @IsDateNotInPast()
@@ -32,50 +42,88 @@ export class CreateAtendimentoDto {
 
   // Em minutos; usada na checagem de conflito de horário. O teto de 24h é o
   // que garante a margem de busca de verificarConflitoHorario().
+  @ApiPropertyOptional({
+    description: 'Duração em minutos (1 a 1440)',
+    example: 50,
+  })
   @IsOptional()
   @IsInt()
   @Min(1, { message: 'A duração mínima é de 1 minuto.' })
   @Max(1440, { message: 'A duração máxima é de 24h (1440 minutos).' })
   duracaoMinutos?: number;
 
+  @ApiProperty({
+    description: 'Título da sessão',
+    example: 'Consciência fonológica',
+  })
   @IsNotEmpty({ message: 'O título da sessão é obrigatório.' })
   @IsString()
   tituloSessao!: string;
 
+  @ApiPropertyOptional({
+    description: 'Observações livres da sessão',
+    example: 'Demonstrou boa atenção sustentada.',
+  })
   @IsOptional()
   @IsString()
   observacoes?: string;
 
   // Sobrescrita pontual da fase; se omitido, usa aprendente.faseAtual no momento da criação.
+  @ApiPropertyOptional({
+    description: 'Fase da sessão; se omitida, usa a fase atual do aprendente',
+    enum: FaseAtendimento,
+  })
   @IsOptional()
   @IsEnum(FaseAtendimento)
   fase?: FaseAtendimento;
 }
 
 export class UpdateAtendimentoDto {
+  @ApiPropertyOptional({
+    description: 'Nova data e hora da sessão (ISO 8601)',
+    example: '2026-11-17T14:00:00.000Z',
+    type: String,
+  })
   @IsOptional()
   @IsDateString({}, { message: 'Data inválida' })
   @IsDateNotInPast()
   dataAtendimento?: string | Date;
 
+  @ApiPropertyOptional({
+    description: 'Duração em minutos (1 a 1440)',
+    example: 50,
+  })
   @IsOptional()
   @IsInt()
   @Min(1, { message: 'A duração mínima é de 1 minuto.' })
   @Max(1440, { message: 'A duração máxima é de 24h (1440 minutos).' })
   duracaoMinutos?: number;
 
+  @ApiPropertyOptional({
+    description: 'Título da sessão',
+    example: 'Consciência fonológica',
+  })
   @IsOptional()
   @IsString()
   tituloSessao?: string;
 
+  @ApiPropertyOptional({
+    description: 'Observações livres da sessão',
+    example: 'Demonstrou boa atenção sustentada.',
+  })
   @IsOptional()
   @IsString()
   observacoes?: string;
 
+  @ApiPropertyOptional({
+    enum: StatusAtendimento,
+    example: 'CONCLUIDO',
+  })
   @IsOptional()
   @IsEnum(StatusAtendimento)
   status?: StatusAtendimento;
 
+  @ApiPropertyOptional({ example: true })
   @IsOptional()
   @IsBoolean()
   concluido?: boolean;
@@ -84,12 +132,14 @@ export class UpdateAtendimentoDto {
 // Query string chega como texto: @Type converte para número antes de
 // validar ("abc" vira NaN e é recusado pelo @IsInt).
 export class CalendarioQueryDto {
+  @ApiProperty({ description: 'Mês (1 a 12)', example: 11 })
   @Type(() => Number)
   @IsInt({ message: 'O mês deve ser um número inteiro de 1 a 12.' })
   @Min(1, { message: 'O mês deve ser um número inteiro de 1 a 12.' })
   @Max(12, { message: 'O mês deve ser um número inteiro de 1 a 12.' })
   mes!: number;
 
+  @ApiProperty({ description: 'Ano (2000 a 2100)', example: 2026 })
   @Type(() => Number)
   @IsInt({ message: 'O ano deve ser um número inteiro entre 2000 e 2100.' })
   @Min(2000, { message: 'O ano deve ser um número inteiro entre 2000 e 2100.' })
@@ -98,6 +148,11 @@ export class CalendarioQueryDto {
 }
 
 export class UpdateStatusAtendimentoDto {
+  @ApiProperty({
+    description: 'FALTA = não compareceu; CANCELADO = cancelada previamente',
+    enum: StatusAtendimento,
+    example: 'FALTA',
+  })
   @IsNotEmpty({ message: 'O status é obrigatório.' })
   @IsEnum(StatusAtendimento)
   status!: StatusAtendimento;

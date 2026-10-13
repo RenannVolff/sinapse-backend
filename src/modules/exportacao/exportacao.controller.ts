@@ -1,11 +1,12 @@
 import { Body, Controller, Param, Post, StreamableFile } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 import { ExportarDocxDto } from './dto/exportar-docx.dto';
 import { ExportacaoService } from './exportacao.service';
 
+@ApiBearerAuth()
 @ApiTags('Exportação')
 @Controller('aprendentes/:id/exportar-docx')
 export class ExportacaoController {
@@ -14,7 +15,8 @@ export class ExportacaoController {
   @Post()
   @Throttle({ default: { limit: 10, ttl: 60_000 } }) // rota cara: geração de documento
   @ApiOperation({
-    summary: 'Gera um relatório .docx com o texto da IA e os gráficos capturados',
+    summary:
+      'Gera um relatório .docx com o texto da IA e os gráficos capturados',
   })
   async exportarDocx(
     @Param('id') id: string,

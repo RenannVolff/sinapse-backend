@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   AlignmentType,
   BorderStyle,
@@ -52,7 +56,9 @@ export class ExportacaoService {
             }),
             ...this.montarParagrafosResumo(dto.resumoIa),
             ...this.montarSecoesGraficos(dto.graficos),
-            this.montarParagrafoAviso(dto.avisoRevisao?.trim() || AVISO_REVISAO_PADRAO),
+            this.montarParagrafoAviso(
+              dto.avisoRevisao?.trim() || AVISO_REVISAO_PADRAO,
+            ),
           ],
         },
       ],
@@ -79,7 +85,9 @@ export class ExportacaoService {
       .split(/\n\s*\n/)
       .map((trecho) => trecho.trim())
       .filter((trecho) => trecho.length > 0)
-      .map((trecho) => new Paragraph({ text: trecho, spacing: { after: 200 } }));
+      .map(
+        (trecho) => new Paragraph({ text: trecho, spacing: { after: 200 } }),
+      );
   }
 
   private montarSecoesGraficos(
@@ -118,10 +126,7 @@ export class ExportacaoService {
   ): { width: number; height: number } {
     const buffer = Buffer.from(imagemBase64, 'base64');
 
-    if (
-      buffer.length < 24 ||
-      !buffer.subarray(0, 8).equals(PNG_ASSINATURA)
-    ) {
+    if (buffer.length < 24 || !buffer.subarray(0, 8).equals(PNG_ASSINATURA)) {
       throw new BadRequestException(
         `Imagem inválida para o gráfico "${titulo}": esperado um PNG em base64.`,
       );
@@ -142,9 +147,7 @@ export class ExportacaoService {
       border: {
         top: { style: BorderStyle.SINGLE, size: 6, space: 8, color: '999999' },
       },
-      children: [
-        new TextRun({ text: avisoRevisao, italics: true }),
-      ],
+      children: [new TextRun({ text: avisoRevisao, italics: true })],
     });
   }
 

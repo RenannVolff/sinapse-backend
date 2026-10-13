@@ -9,14 +9,15 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PeiTemplateService } from './pei-template.service';
 import { CreatePeiTemplateDto } from './dto/create-pei-template.dto';
 import { UpdatePeiTemplateDto } from './dto/update-pei-template.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
-@ApiTags('PeiTemplate')
+@ApiBearerAuth()
+@ApiTags('Modelos de PEI')
 @Controller('pei-templates')
 export class PeiTemplateController {
   constructor(private readonly peiTemplateService: PeiTemplateService) {}

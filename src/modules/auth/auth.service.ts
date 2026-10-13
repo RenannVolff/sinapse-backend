@@ -172,7 +172,10 @@ export class AuthService {
   // O banco guarda só o hash do token, nunca o valor puro — por isso a
   // busca é pelo hash do que chegou.
   async verificarEmail(tokenPuro: string): Promise<{ mensagem: string }> {
-    const tokenHash = crypto.createHash('sha256').update(tokenPuro).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(tokenPuro)
+      .digest('hex');
 
     const usuario = await this.prisma.usuario.findFirst({
       where: { tokenVerificacao: tokenHash },
@@ -197,7 +200,9 @@ export class AuthService {
       },
     });
 
-    return { mensagem: 'E-mail verificado com sucesso. Você já pode fazer login.' };
+    return {
+      mensagem: 'E-mail verificado com sucesso. Você já pode fazer login.',
+    };
   }
 
   // Responde sempre a mesma mensagem genérica, exista o e-mail ou não, para
@@ -235,7 +240,10 @@ export class AuthService {
     tokenPuro: string,
     novaSenha: string,
   ): Promise<{ mensagem: string }> {
-    const tokenHash = crypto.createHash('sha256').update(tokenPuro).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(tokenPuro)
+      .digest('hex');
 
     const usuario = await this.prisma.usuario.findFirst({
       where: { tokenRecuperacaoSenha: tokenHash },
@@ -262,6 +270,8 @@ export class AuthService {
       },
     });
 
-    return { mensagem: 'Senha redefinida com sucesso. Você já pode fazer login.' };
+    return {
+      mensagem: 'Senha redefinida com sucesso. Você já pode fazer login.',
+    };
   }
 }

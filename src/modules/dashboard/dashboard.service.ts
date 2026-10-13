@@ -19,50 +19,50 @@ export class DashboardService {
       totalAtividades,
       sessoesConcluidas,
     ] = await Promise.all([
-        this.prisma.aprendente.count({
-          where: { usuarioId, deletedAt: null },
-        }),
+      this.prisma.aprendente.count({
+        where: { usuarioId, deletedAt: null },
+      }),
 
-        this.prisma.atendimento.count({
-          where: {
-            aprendente: { usuarioId },
-            deletedAt: null,
-            dataAtendimento: {
-              gte: hojeInicio,
-              lte: hojeFim,
+      this.prisma.atendimento.count({
+        where: {
+          aprendente: { usuarioId },
+          deletedAt: null,
+          dataAtendimento: {
+            gte: hojeInicio,
+            lte: hojeFim,
+          },
+        },
+      }),
+
+      // Conta itens de checklist marcados, não atividades — apesar do card
+      // se chamar "atividades realizadas".
+      this.prisma.itemChecklist.count({
+        where: {
+          realizado: true,
+          atividade: {
+            atendimento: { deletedAt: null, aprendente: { usuarioId } },
+          },
+        },
+      }),
+
+      // Mesmo critério do gráfico de evolução em Relatórios: só sessões
+      // finalizadas entram na média.
+      this.prisma.atendimento.findMany({
+        where: {
+          aprendente: { usuarioId },
+          deletedAt: null,
+          concluido: true,
+        },
+        select: {
+          atividades: {
+            select: {
+              nivelDificuldade: true,
+              itensChecklist: { select: { realizado: true } },
             },
           },
-        }),
-
-        // Conta itens de checklist marcados, não atividades — apesar do card
-        // se chamar "atividades realizadas".
-        this.prisma.itemChecklist.count({
-          where: {
-            realizado: true,
-            atividade: {
-              atendimento: { deletedAt: null, aprendente: { usuarioId } },
-            },
-          },
-        }),
-
-        // Mesmo critério do gráfico de evolução em Relatórios: só sessões
-        // finalizadas entram na média.
-        this.prisma.atendimento.findMany({
-          where: {
-            aprendente: { usuarioId },
-            deletedAt: null,
-            concluido: true,
-          },
-          select: {
-            atividades: {
-              select: {
-                nivelDificuldade: true,
-                itensChecklist: { select: { realizado: true } },
-              },
-            },
-          },
-        }),
-      ]);
+        },
+      }),
+    ]);
 
     // Média por sessão (não por atividade), sobre todos os aprendentes do usuário.
     const mediaEvolucao =

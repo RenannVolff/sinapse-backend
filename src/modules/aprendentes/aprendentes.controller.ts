@@ -10,7 +10,12 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiQuery,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AprendentesService } from './aprendentes.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
@@ -19,6 +24,7 @@ import { RelatorioIaQueryDto } from './dto/relatorio-ia-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
+@ApiBearerAuth()
 @ApiTags('Aprendentes')
 @Controller('aprendentes')
 export class AprendentesController {

@@ -8,7 +8,12 @@ import {
 import { RelatoriosService } from './relatorios.service';
 import type { AgrupamentoFrequencia } from './relatorios.service';
 import { EvolucaoQueryDto } from './dto/evolucao-query.dto';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import {
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
@@ -20,6 +25,7 @@ function parseAgrupamento(agrupamento?: string): AgrupamentoFrequencia {
   );
 }
 
+@ApiBearerAuth()
 @ApiTags('Relatórios')
 @Controller('relatorios')
 export class RelatoriosController {

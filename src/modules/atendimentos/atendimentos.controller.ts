@@ -10,7 +10,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import {
   AtendimentosService,
   CalendarioQueryDto,
@@ -21,6 +21,8 @@ import {
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
+@ApiBearerAuth()
+@ApiTags('Atendimentos')
 @Controller('atendimentos')
 export class AtendimentosController {
   constructor(private readonly atendimentosService: AtendimentosService) {}

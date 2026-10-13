@@ -1,5 +1,13 @@
-import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { DoisFatoresService } from './dois-fatores.service';
@@ -13,10 +21,7 @@ import { DesativarDoisFatoresDto } from './dto/desativar-dois-fatores.dto';
 import { VerificarLoginDoisFatoresDto } from './dto/verificar-login-dois-fatores.dto';
 import { IsPublic } from './decorators/is-public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
-import {
-  honeypotAcionado,
-  loginFalso,
-} from '../../common/honeypot/honeypot';
+import { honeypotAcionado, loginFalso } from '../../common/honeypot/honeypot';
 
 @ApiTags('Autenticação')
 @Controller('auth')
@@ -41,7 +46,9 @@ export class AuthController {
   @IsPublic()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Get('verificar-email')
-  @ApiOperation({ summary: 'Confirma o cadastro a partir do token enviado por e-mail' })
+  @ApiOperation({
+    summary: 'Confirma o cadastro a partir do token enviado por e-mail',
+  })
   verificarEmail(@Query() query: VerificarEmailDto) {
     return this.authService.verificarEmail(query.token);
   }
@@ -70,22 +77,31 @@ export class AuthController {
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
   @Post('redefinir-senha')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Redefine a senha a partir do token enviado por e-mail' })
+  @ApiOperation({
+    summary: 'Redefine a senha a partir do token enviado por e-mail',
+  })
   redefinirSenha(@Body() dto: RedefinirSenhaDto) {
     return this.authService.redefinirSenha(dto.token, dto.novaSenha);
   }
 
+  @ApiBearerAuth()
   @Post('2fa/gerar')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Gera o segredo TOTP e o QR code (2FA ainda inativo)' })
+  @ApiOperation({
+    summary: 'Gera o segredo TOTP e o QR code (2FA ainda inativo)',
+  })
   gerarDoisFatores(@CurrentUser('id') usuarioId: string) {
     return this.doisFatoresService.gerarSegredo(usuarioId);
   }
 
+  @ApiBearerAuth()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('2fa/ativar')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Ativa o 2FA e devolve os códigos de backup (exibidos uma única vez)' })
+  @ApiOperation({
+    summary:
+      'Ativa o 2FA e devolve os códigos de backup (exibidos uma única vez)',
+  })
   ativarDoisFatores(
     @CurrentUser('id') usuarioId: string,
     @Body() dto: AtivarDoisFatoresDto,
@@ -93,6 +109,7 @@ export class AuthController {
     return this.doisFatoresService.ativar(usuarioId, dto.codigo);
   }
 
+  @ApiBearerAuth()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('2fa/desativar')
   @HttpCode(HttpStatus.OK)

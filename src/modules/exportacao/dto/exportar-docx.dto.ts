@@ -25,7 +25,9 @@ export class GraficoExportacaoDto {
 }
 
 export class ExportarDocxDto {
-  @ApiProperty({ description: 'Nome do aprendente para o cabeçalho do documento' })
+  @ApiProperty({
+    description: 'Nome do aprendente para o cabeçalho do documento',
+  })
   @IsString()
   @IsNotEmpty()
   nomeAprendente!: string;

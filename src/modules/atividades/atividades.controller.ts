@@ -1,11 +1,12 @@
 import { Controller, Post, Body, Patch, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AtividadesService } from './atividades.service';
 import { CreateAtividadeDto } from './dto/create-atividade.dto';
 import { UpdateChecklistDto } from './dto/update-checklist.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
+@ApiBearerAuth()
 @ApiTags('Atividades')
 @Controller('atividades')
 export class AtividadesController {

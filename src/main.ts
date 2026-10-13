@@ -1,8 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { configureApp } from './app.setup';
+import { criarDocumentoSwagger } from './swagger';
 
 // Aborta a subida com uma mensagem clara. Checar aqui já funciona: o
 // ConfigModule carrega o .env no import do AppModule.
@@ -39,7 +40,9 @@ function validarAmbiente(): void {
   if (faltando.length > 0) {
     erroFatal(
       `NODE_ENV=production e faltam variáveis de ambiente obrigatórias:\n` +
-        faltando.map((nome) => `  - ${nome}: ${obrigatorias[nome]}`).join('\n') +
+        faltando
+          .map((nome) => `  - ${nome}: ${obrigatorias[nome]}`)
+          .join('\n') +
         '\nO servidor não vai subir. Defina-as nas variáveis de ambiente do\n' +
         'servidor (Render) — veja .env.example e DEPLOY.md.',
     );
@@ -61,21 +64,7 @@ async function bootstrap() {
     process.env.NODE_ENV !== 'production' ||
     process.env.SWAGGER_ENABLED === 'true'
   ) {
-    const config = new DocumentBuilder()
-      .setTitle('Sinapse Edu API')
-      .setDescription(
-        'API de Acompanhamento Neuropsicopedagógico Inteligente - TCC',
-      )
-      .setVersion('1.0')
-      .addTag('Auth', 'Gestão de Acesso e Profissionais')
-      .addTag('Aprendentes', 'Gestão de Aprendentes')
-      .addTag('Atendimentos', 'Calendário e Sessões')
-      .addTag('Atividades', 'Protocolos e Checklists')
-      .addTag('Relatórios', 'Inteligência de Dados e Gráficos')
-      .build();
-
-    const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('api/docs', app, document);
+    SwaggerModule.setup('api/docs', app, criarDocumentoSwagger(app));
   }
 
   await app.listen(process.env.PORT || 3000);

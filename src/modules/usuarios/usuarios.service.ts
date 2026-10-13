@@ -30,13 +30,18 @@ export class UsuariosService {
     email: string,
   ): Promise<void> {
     const tokenPuro = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(tokenPuro).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(tokenPuro)
+      .digest('hex');
 
     await this.prisma.usuario.update({
       where: { id: usuarioId },
       data: {
         tokenVerificacao: tokenHash,
-        tokenVerificacaoExpiraEm: new Date(Date.now() + TOKEN_VERIFICACAO_VALIDADE_MS),
+        tokenVerificacaoExpiraEm: new Date(
+          Date.now() + TOKEN_VERIFICACAO_VALIDADE_MS,
+        ),
       },
     });
 
@@ -50,7 +55,10 @@ export class UsuariosService {
     email: string,
   ): Promise<void> {
     const tokenPuro = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(tokenPuro).digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(tokenPuro)
+      .digest('hex');
 
     await this.prisma.usuario.update({
       where: { id: usuarioId },

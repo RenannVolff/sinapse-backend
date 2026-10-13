@@ -207,8 +207,8 @@ ${detalhamentoSessoes}`;
   private algumProvedorIAConfigurado(): boolean {
     return Boolean(
       process.env.GEMINI_API_KEY ||
-        process.env.GROQ_API_KEY ||
-        process.env.OPENROUTER_API_KEY,
+      process.env.GROQ_API_KEY ||
+      process.env.OPENROUTER_API_KEY,
     );
   }
 
@@ -222,7 +222,10 @@ ${detalhamentoSessoes}`;
     const prazoFinal = Date.now() + opcoes.timeoutMs;
     const erros: string[] = [];
 
-    const tentativas: { rotulo: string; chamar: (tempoMs: number) => Promise<string> }[] = [];
+    const tentativas: {
+      rotulo: string;
+      chamar: (tempoMs: number) => Promise<string>;
+    }[] = [];
 
     if (process.env.GEMINI_API_KEY) {
       for (const modelo of GEMINI_MODELS_CASCATA) {

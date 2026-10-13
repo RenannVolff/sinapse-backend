@@ -67,8 +67,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       if (status === HttpStatus.TOO_MANY_REQUESTS) {
         return {
           statusCode: status,
-          message:
-            'Muitas requisições. Aguarde um momento e tente novamente.',
+          message: 'Muitas requisições. Aguarde um momento e tente novamente.',
         };
       }
 

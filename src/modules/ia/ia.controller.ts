@@ -1,9 +1,10 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { IaService } from './ia.service';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
+@ApiBearerAuth()
 @ApiTags('Inteligência Artificial')
 @Controller('ia')
 export class IaController {

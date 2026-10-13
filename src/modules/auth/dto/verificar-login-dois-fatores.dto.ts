@@ -2,7 +2,11 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
 export class VerificarLoginDoisFatoresDto {
-  @ApiProperty({ description: 'Token temporário devolvido pelo /auth/login' })
+  @ApiProperty({
+    description: 'Token temporário devolvido pelo /auth/login',
+    example:
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIuLi4ifQ.assinatura',
+  })
   @IsString()
   @IsNotEmpty({ message: 'O token temporário é obrigatório' })
   tokenTemporario!: string;

@@ -34,7 +34,8 @@ function normalizarCodigoBackup(codigo: string): string {
 function gerarCodigoBackup(): string {
   let codigo = '';
   for (let i = 0; i < TAMANHO_CODIGO_BACKUP; i++) {
-    codigo += ALFABETO_CODIGO_BACKUP[crypto.randomInt(ALFABETO_CODIGO_BACKUP.length)];
+    codigo +=
+      ALFABETO_CODIGO_BACKUP[crypto.randomInt(ALFABETO_CODIGO_BACKUP.length)];
   }
   return codigo;
 }
