@@ -1,5 +1,6 @@
 import {
   AppTeste,
+  ClienteHttp,
   clienteHttp,
   criarAppTeste,
   novoIp,
@@ -180,6 +181,50 @@ describe('E. Proteção', () => {
         .post('/auth/login')
         .send({ email: t.email, senha: t.senha })
         .expect(429);
+    });
+  });
+
+  describe('Rate limit atrás da Cloudflare (CF-Connecting-IP)', () => {
+    // No Render o X-Forwarded-For traz o IP da borda da Cloudflare, que muda
+    // a cada requisição; o cliente real vem no CF-Connecting-IP.
+    const loginInvalido = (cliente: ClienteHttp, cf: string) =>
+      cliente.post('/auth/login').set('CF-Connecting-IP', cf).send({});
+
+    it('CF-Connecting-IP diferentes têm contadores separados, mesmo com o mesmo X-Forwarded-For', async () => {
+      const borda = clienteHttp(ctx.app, novoIp());
+      const cfA = novoIp();
+      const cfB = novoIp();
+
+      for (let i = 0; i < 5; i++) await loginInvalido(borda, cfA).expect(400);
+      await loginInvalido(borda, cfA).expect(429);
+
+      await loginInvalido(borda, cfB).expect(400);
+    });
+
+    it('o mesmo CF-Connecting-IP compartilha o contador mesmo com X-Forwarded-For diferentes', async () => {
+      // Sem IP fixo: cada requisição sai com um X-Forwarded-For novo.
+      const bordasVariadas = clienteHttp(ctx.app);
+      const cf = novoIp();
+
+      for (let i = 0; i < 5; i++)
+        await loginInvalido(bordasVariadas, cf).expect(400);
+      await loginInvalido(bordasVariadas, cf).expect(429);
+    });
+
+    it('CF-Connecting-IP inválido é ignorado e o contador volta a ser o req.ip', async () => {
+      const ip = novoIp();
+      const cliente = clienteHttp(ctx.app, ip);
+
+      // Valores inválidos diferentes a cada requisição: se fossem usados como
+      // identificador, nunca bloqueariam.
+      for (let i = 0; i < 5; i++)
+        await loginInvalido(cliente, `lixo-${i}`).expect(400);
+      await loginInvalido(cliente, 'lixo-final').expect(429);
+
+      // Outro req.ip com o mesmo valor inválido não herda o bloqueio.
+      await loginInvalido(clienteHttp(ctx.app, novoIp()), 'lixo-final').expect(
+        400,
+      );
     });
   });
 

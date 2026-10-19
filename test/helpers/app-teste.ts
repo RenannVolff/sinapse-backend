@@ -65,8 +65,8 @@ export function novoIp(): string {
 }
 
 // O ThrottlerGuard conta requisições por IP e o app confia no primeiro proxy
-// (trust proxy = 1), então o X-Forwarded-For define o IP visto pelo rate
-// limit. Sem `ip` fixo, cada requisição vem de um IP novo e os testes de
+// (trust proxy = 1), então, sem CF-Connecting-IP/True-Client-IP, o
+// X-Forwarded-For define o IP visto pelo rate limit. Sem `ip` fixo, cada requisição vem de um IP novo e os testes de
 // negócio não esbarram nos limites; a suíte de proteção fixa o IP para
 // exercitá-los de propósito.
 export function clienteHttp(

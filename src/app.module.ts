@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -21,6 +21,7 @@ import { ExportacaoModule } from './modules/exportacao/exportacao.module';
 import { EmailModule } from './modules/email/email.module';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
+import { ThrottlerClienteGuard } from './common/guards/throttler-cliente.guard';
 
 @Module({
   imports: [
@@ -49,9 +50,10 @@ import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
     AppService,
     // Guards globais executam na ordem de registro: o rate limit vem antes
     // da autenticação, para barrar abuso sem gastar validação de JWT.
+    // Conta por IP real do cliente (cabeçalhos da Cloudflare), ver ip-cliente.ts.
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: ThrottlerClienteGuard,
     },
     {
       provide: APP_GUARD,
