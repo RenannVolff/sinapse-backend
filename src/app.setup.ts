@@ -1,9 +1,10 @@
-import { ValidationPipe } from '@nestjs/common';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { json, NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { origensPermitidasCors } from './common/config/origens-frontend';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { exceptionFactoryValidacao } from './common/validation/mensagens-validacao';
 
 // Configuração compartilhada entre o main.ts e a suíte e2e (test/), para que
 // os testes exercitem exatamente a mesma pilha de middlewares, pipes e
@@ -35,11 +36,32 @@ export function configureApp(app: NestExpressApplication): void {
   app.use('/aprendentes/:id/exportar-docx', json({ limit: '15mb' }));
   app.use(json({ limit: '100kb' }));
 
+  // JSON malformado: sem isto o Nest devolve a mensagem crua do parser
+  // ("Unexpected end of JSON input"), em inglês.
+  app.use(
+    (
+      err: { type?: string } | undefined,
+      _req: Request,
+      _res: Response,
+      next: NextFunction,
+    ) => {
+      if (err?.type === 'entity.parse.failed') {
+        return next(
+          new BadRequestException(
+            'O corpo da requisição não é um JSON válido.',
+          ),
+        );
+      }
+      next(err);
+    },
+  );
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true, // descarta campos fora do DTO
       forbidNonWhitelisted: true, // ...e responde 400 em vez de ignorar em silêncio
       transform: true, // converte tipos (ex: string "1" vira number 1)
+      exceptionFactory: exceptionFactoryValidacao, // mensagens padrão em português
     }),
   );
 

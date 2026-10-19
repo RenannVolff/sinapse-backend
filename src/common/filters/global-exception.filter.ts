@@ -71,6 +71,26 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         };
       }
 
+      // Rota inexistente: o Nest responde "Cannot GET /rota", em inglês
+      if (
+        status === HttpStatus.NOT_FOUND &&
+        /^Cannot [A-Z]+ /.test(exception.message)
+      ) {
+        return { statusCode: status, message: 'Rota não encontrada.' };
+      }
+
+      // Parâmetro de rota com codificação inválida (ex: /aprendentes/%FF):
+      // o Nest repassa a mensagem do Express ("Failed to decode param"), em inglês
+      if (
+        status === HttpStatus.BAD_REQUEST &&
+        /^(Failed to decode param|URI malformed)/.test(exception.message)
+      ) {
+        return {
+          statusCode: status,
+          message: 'O endereço da requisição contém caracteres inválidos.',
+        };
+      }
+
       if (typeof response === 'string') {
         return { statusCode: status, message: response };
       }
