@@ -30,6 +30,12 @@ const MENSAGEM_REENVIO_GENERICA =
 const MENSAGEM_ESQUECI_SENHA_GENERICA =
   'Se este e-mail estiver cadastrado, enviamos um link de redefinição de senha.';
 
+// Os DTOs já mandam o e-mail em minúsculas, mas contas antigas podem ter
+// sido gravadas com maiúsculas: a busca ignora a caixa para não trancá-las.
+function emailIgual(email: string) {
+  return { email: { equals: email, mode: 'insensitive' as const } };
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -51,8 +57,8 @@ export class AuthService {
   private readonly segredoPreAuth2fa: string;
 
   async login(dados: LoginDto) {
-    const usuario = await this.prisma.usuario.findUnique({
-      where: { email: dados.email },
+    const usuario = await this.prisma.usuario.findFirst({
+      where: emailIgual(dados.email),
     });
 
     if (!usuario) {
@@ -208,7 +214,9 @@ export class AuthService {
   // Responde sempre a mesma mensagem genérica, exista o e-mail ou não, para
   // não permitir enumeração de contas.
   async reenviarVerificacao(email: string): Promise<{ mensagem: string }> {
-    const usuario = await this.prisma.usuario.findUnique({ where: { email } });
+    const usuario = await this.prisma.usuario.findFirst({
+      where: emailIgual(email),
+    });
 
     if (usuario && !usuario.emailVerificado) {
       await this.usuariosService.gerarEEnviarTokenVerificacao(
@@ -222,7 +230,9 @@ export class AuthService {
 
   // Mesma proteção contra enumeração de reenviarVerificacao().
   async esqueciSenha(email: string): Promise<{ mensagem: string }> {
-    const usuario = await this.prisma.usuario.findUnique({ where: { email } });
+    const usuario = await this.prisma.usuario.findFirst({
+      where: emailIgual(email),
+    });
 
     if (usuario) {
       await this.usuariosService.gerarEEnviarTokenRecuperacaoSenha(

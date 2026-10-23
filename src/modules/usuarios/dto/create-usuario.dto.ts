@@ -1,28 +1,34 @@
 import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
-import {
-  IsEmail,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MaxLength,
-} from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { SenhaForte } from '../../../common/validators/senha-forte.decorator';
+import {
+  CampoEmail,
+  CampoNomePessoa,
+} from '../../../common/validation/campos.decorators';
+import { LIMITES } from '../../../common/validation/limits.constants';
 
 export class CreateUsuarioDto {
-  @ApiProperty({ description: 'Nome completo do profissional' })
-  @IsString()
-  @IsNotEmpty({ message: 'O nome é obrigatório' })
+  @ApiProperty({
+    description: 'Nome completo do profissional',
+    maxLength: LIMITES.NOME_PESSOA,
+  })
+  @CampoNomePessoa('Nome')
   nome!: string;
 
-  @ApiProperty({ description: 'E-mail para login no sistema' })
-  @IsEmail({}, { message: 'Forneça um e-mail válido' })
-  @IsNotEmpty()
+  @ApiProperty({
+    description:
+      'E-mail para login (domínio precisa existir; e-mail temporário é recusado)',
+    maxLength: LIMITES.EMAIL,
+  })
+  @CampoEmail('E-mail', { verificarDominio: true })
   email!: string;
 
   @ApiProperty({
     description:
-      'Senha forte (Mínimo 8 caracteres, 1 maiúscula, 1 minúscula, 1 número e 1 especial)',
+      'Senha forte (8 a 50 caracteres, 1 maiúscula, 1 minúscula, 1 número ou especial)',
     example: 'SenhaForte@123',
+    minLength: LIMITES.SENHA_MIN,
+    maxLength: LIMITES.SENHA_MAX,
   })
   @SenhaForte()
   senha!: string;
@@ -32,6 +38,6 @@ export class CreateUsuarioDto {
   @ApiHideProperty()
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(LIMITES.HONEYPOT)
   website?: string;
 }

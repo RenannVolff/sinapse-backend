@@ -1,9 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty } from 'class-validator';
+import { CampoEmail } from '../../../common/validation/campos.decorators';
+import { LIMITES } from '../../../common/validation/limits.constants';
 
 export class EsqueciSenhaDto {
   @ApiProperty({ description: 'E-mail cadastrado' })
-  @IsEmail({}, { message: 'Forneça um e-mail válido' })
-  @IsNotEmpty()
+  @CampoEmail('E-mail', { maximo: LIMITES.EMAIL_LOGIN })
   email!: string;
 }

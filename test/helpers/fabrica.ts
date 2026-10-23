@@ -25,7 +25,7 @@ export async function criarTerapeuta(
   ctx: AppTeste,
   dados: { nome?: string; email?: string; senha?: string } = {},
 ): Promise<Terapeuta> {
-  const nome = dados.nome ?? 'Terapeuta E2E';
+  const nome = dados.nome ?? 'Terapeuta Teste';
   const email = dados.email ?? emailUnico();
   const senha = dados.senha ?? SENHA_PADRAO;
 
@@ -61,9 +61,9 @@ export async function criarAprendente(
     .post('/aprendentes')
     .set(bearer(terapeuta.token))
     .send({
-      nomeCompleto: dados.nomeCompleto ?? 'Aprendente E2E',
+      nomeCompleto: dados.nomeCompleto ?? 'Aprendente Teste',
       dataNascimento: dados.dataNascimento ?? '2016-03-10',
-      responsavel: 'Responsável E2E',
+      responsavel: 'Responsável Teste',
       contato: '(41) 99999-0000',
     })
     .expect(201);

@@ -22,3 +22,7 @@ process.env.OPENROUTER_API_KEY = '';
 process.env.GMAIL_USER = '';
 process.env.GMAIL_APP_PASSWORD = '';
 process.env.FRONTEND_URL = 'http://localhost-e2e.invalid';
+
+// Sem consulta de MX no cadastro: os domínios de teste não existem e a
+// suíte não depende de rede. A regra é coberta no teste unitário.
+process.env.VALIDAR_DNS_EMAIL = 'false';

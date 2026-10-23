@@ -7,6 +7,7 @@ import {
   emailUnico,
   SENHA_PADRAO,
 } from './helpers/fabrica';
+import { camposDe, errosDe } from './helpers/erros';
 
 describe('A. Autenticação', () => {
   let ctx: AppTeste;
@@ -94,11 +95,104 @@ describe('A. Autenticação', () => {
           .post('/usuarios')
           .send({ nome: 'Senha Fraca', email, senha })
           .expect(400);
-        expect(JSON.stringify(res.body.message)).toMatch(/senha/i);
+        expect(camposDe(res.body)).toContain('senha');
         expect(await ctx.prisma.usuario.count({ where: { email } })).toBe(0);
         expect(ctx.email.ultimoToken('verificacao', email)).toBeUndefined();
       },
     );
+
+    it('rejeita senha acima de 50 caracteres no cadastro', async () => {
+      const res = await ctx.api
+        .post('/usuarios')
+        .send({
+          nome: 'Senha Longa',
+          email: emailUnico(),
+          senha: `Ab@1${'x'.repeat(47)}`,
+        })
+        .expect(400);
+      expect(errosDe(res.body)).toContainEqual({
+        field: 'senha',
+        message: 'A senha deve ter no máximo 50 caracteres',
+      });
+    });
+
+    it.each([
+      ['com dígito', 'Ana 2'],
+      ['com símbolo', 'Ana <b>@</b>'],
+      ['acima de 50 caracteres', 'A'.repeat(51)],
+    ])('rejeita nome %s no cadastro', async (_caso, nome) => {
+      const res = await ctx.api
+        .post('/usuarios')
+        .send({ nome, email: emailUnico(), senha: SENHA_PADRAO })
+        .expect(400);
+      expect(camposDe(res.body)).toEqual(['nome']);
+    });
+
+    it('aceita ponto de abreviação no nome ("Dra. Ana Lima Jr.")', async () => {
+      const res = await ctx.api
+        .post('/usuarios')
+        .send({
+          nome: 'Dra. Ana Lima Jr.',
+          email: emailUnico(),
+          senha: SENHA_PADRAO,
+        })
+        .expect(201);
+      expect((res.body as { nome: string }).nome).toBe('Dra. Ana Lima Jr.');
+    });
+
+    it('rejeita nome começando com ponto, com a mensagem da regra', async () => {
+      const res = await ctx.api
+        .post('/usuarios')
+        .send({ nome: '.Ana', email: emailUnico(), senha: SENHA_PADRAO })
+        .expect(400);
+      expect(errosDe(res.body)).toEqual([
+        {
+          field: 'nome',
+          message:
+            'Nome: use apenas letras, espaço, ponto, hífen ou apóstrofo.',
+        },
+      ]);
+    });
+
+    it.each([
+      ['domínio com erro de digitação', 'ana@gmial.com', /ana@gmail\.com/],
+      ['e-mail temporário', 'ana@mailinator.com', /temporário/],
+      ['formato inválido', 'ana@@x', /e-mail válido/],
+    ])(
+      'rejeita e-mail (%s) no cadastro com mensagem no campo',
+      async (_caso, email, mensagem) => {
+        const res = await ctx.api
+          .post('/usuarios')
+          .send({ nome: 'Ana Lima', email, senha: SENHA_PADRAO })
+          .expect(400);
+        expect(errosDe(res.body)).toEqual([
+          {
+            field: 'email',
+            message: expect.stringMatching(mensagem) as string,
+          },
+        ]);
+      },
+    );
+
+    it('normaliza o e-mail (trim + minúsculas) e o login não diferencia maiúsculas', async () => {
+      const email = emailUnico('caixa');
+      const cadastro = await ctx.api
+        .post('/usuarios')
+        .send({
+          nome: 'Caixa Alta',
+          email: `  ${email.toUpperCase()} `,
+          senha: SENHA_PADRAO,
+        })
+        .expect(201);
+      expect((cadastro.body as { email: string }).email).toBe(email);
+
+      const token = ctx.email.ultimoToken('verificacao', email);
+      await ctx.api.get('/auth/verificar-email').query({ token }).expect(200);
+      await ctx.api
+        .post('/auth/login')
+        .send({ email: email.toUpperCase(), senha: SENHA_PADRAO })
+        .expect(200);
+    });
 
     it('rejeita cadastro com e-mail já existente com 409', async () => {
       const existente = await criarTerapeuta(ctx);

@@ -75,8 +75,8 @@ export class UsuariosService {
 
   async create(data: CreateUsuarioDto) {
     //
-    const emailEmUso = await this.prisma.usuario.findUnique({
-      where: { email: data.email },
+    const emailEmUso = await this.prisma.usuario.findFirst({
+      where: { email: { equals: data.email, mode: 'insensitive' } },
     });
 
     if (emailEmUso) {
@@ -107,7 +107,11 @@ export class UsuariosService {
 
       return usuario;
     } catch (error) {
-      console.error('Erro ao criar usuário:', error);
+      // Só o código: a mensagem do Prisma repete nome e e-mail (LGPD)
+      console.error(
+        'Erro ao criar usuário:',
+        (error as { code?: string }).code ?? (error as Error).name,
+      );
       throw new InternalServerErrorException(
         'Erro ao cadastrar o terapeuta no banco de dados.',
       );
@@ -122,8 +126,11 @@ export class UsuariosService {
     if (!usuarioAtual) throw new NotFoundException('Usuário não encontrado.');
 
     if (data.email && data.email !== usuarioAtual.email) {
-      const emailEmUso = await this.prisma.usuario.findUnique({
-        where: { email: data.email },
+      const emailEmUso = await this.prisma.usuario.findFirst({
+        where: {
+          email: { equals: data.email, mode: 'insensitive' },
+          id: { not: id },
+        },
       });
       if (emailEmUso)
         throw new ConflictException('Este e-mail já está sendo utilizado.');
@@ -145,7 +152,11 @@ export class UsuariosService {
         select: { id: true, nome: true, email: true },
       });
     } catch (error) {
-      console.error('Erro ao atualizar usuário:', error);
+      // Só o código: a mensagem do Prisma repete nome e e-mail (LGPD)
+      console.error(
+        'Erro ao atualizar usuário:',
+        (error as { code?: string }).code ?? (error as Error).name,
+      );
       throw new InternalServerErrorException(
         'Ocorreu um erro interno no banco de dados.',
       );

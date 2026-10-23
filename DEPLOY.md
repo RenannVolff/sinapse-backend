@@ -47,6 +47,10 @@ Descrição de cada uma em `.env.example`.
 | `SWAGGER_ENABLED` | Não — `true` liga o `/api/docs` (ex: dia da apresentação) |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Para enviar e-mails (ver observação abaixo) |
 | `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY` | Não — sem nenhuma, os relatórios usam só a heurística |
+| `VALIDAR_DNS_EMAIL` | Não — **não cadastrar no Render.** Ausente = ligada (confere MX do domínio no cadastro, timeout 3s, segue o cadastro se o DNS falhar). `false` desliga (só para testes) |
+
+> O e-mail usa o SMTP do Gmail na porta 587 com STARTTLS obrigatório
+> (`requireTLS`); host e porta são fixos no código, não há variável para eles.
 
 > **Render gratuito bloqueia SMTP.** No plano free as conexões de saída SMTP
 > são bloqueadas, então o **cadastro por e-mail** (verificação) e a
