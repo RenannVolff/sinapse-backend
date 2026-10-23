@@ -14,6 +14,9 @@ export class EmailService {
             host: 'smtp.gmail.com',
             port: 587,
             secure: false,
+            // 587 sobe para TLS via STARTTLS; sem isto, se o upgrade
+            // falhasse, a senha de app iria em texto puro.
+            requireTLS: true,
             connectionTimeout: 10000,
             greetingTimeout: 10000,
             socketTimeout: 15000,
