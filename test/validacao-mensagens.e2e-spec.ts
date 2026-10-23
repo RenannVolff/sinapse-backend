@@ -7,6 +7,12 @@ import {
   horarioFuturo,
   Terapeuta,
 } from './helpers/fabrica';
+import {
+  ErroCampo,
+  errosDe,
+  esperarErroValidacao,
+  mensagensDe,
+} from './helpers/erros';
 
 // Qualquer resquício das mensagens padrão do class-validator em inglês.
 const INGLES =
@@ -33,13 +39,13 @@ describe('F. Mensagens de validação em português', () => {
     await ctx.fechar();
   });
 
-  function semIngles(message: unknown) {
-    expect(Array.isArray(message)).toBe(true);
-    for (const m of message as string[]) expect(m).not.toMatch(INGLES);
+  function semIngles(mensagens: string[]) {
+    for (const m of mensagens) expect(m).not.toMatch(INGLES);
   }
 
-  function semRepeticao(message: string[]) {
-    expect(new Set(message).size).toBe(message.length);
+  function semRepeticao(erros: ErroCampo[]) {
+    const chaves = erros.map((e) => `${e.field}|${e.message}`);
+    expect(new Set(chaves).size).toBe(chaves.length);
   }
 
   const casos: {
@@ -48,7 +54,7 @@ describe('F. Mensagens de validação em português', () => {
     url: () => string;
     auth: boolean;
     corpo: () => object;
-    esperadas: string[];
+    esperadas: ErroCampo[];
   }[] = [
     {
       nome: 'POST /usuarios com campo extra',
@@ -61,7 +67,9 @@ describe('F. Mensagens de validação em português', () => {
         senha: 'SenhaForte@123',
         admin: true,
       }),
-      esperadas: ['O campo admin não deve existir.'],
+      esperadas: [
+        { field: 'admin', message: 'O campo admin não deve existir.' },
+      ],
     },
     {
       nome: 'POST /auth/login com campo extra e e-mail inválido',
@@ -69,7 +77,10 @@ describe('F. Mensagens de validação em português', () => {
       url: () => '/auth/login',
       auth: false,
       corpo: () => ({ email: 'x', senha: 'abc', extra: 1 }),
-      esperadas: ['O campo extra não deve existir.', 'E-mail inválido'],
+      esperadas: [
+        { field: 'extra', message: 'O campo extra não deve existir.' },
+        { field: 'email', message: 'E-mail: informe um e-mail válido.' },
+      ],
     },
     {
       nome: 'POST /aprendentes vazio',
@@ -78,10 +89,13 @@ describe('F. Mensagens de validação em português', () => {
       auth: true,
       corpo: () => ({}),
       esperadas: [
-        'O campo nomeCompleto é obrigatório.',
-        'O campo responsavel é obrigatório.',
-        'O campo contato é obrigatório.',
-        'Data inválida',
+        { field: 'nomeCompleto', message: 'Nome completo: campo obrigatório.' },
+        { field: 'responsavel', message: 'Responsável: campo obrigatório.' },
+        { field: 'contato', message: 'Contato: campo obrigatório.' },
+        {
+          field: 'dataNascimento',
+          message: 'Data de nascimento: campo obrigatório.',
+        },
       ],
     },
     {
@@ -97,7 +111,10 @@ describe('F. Mensagens de validação em português', () => {
         dataInicio: '2026-01-01',
       }),
       esperadas: [
-        'O campo aprendenteId deve ser um identificador (UUID) válido.',
+        {
+          field: 'aprendenteId',
+          message: 'Aprendente: identificador inválido.',
+        },
       ],
     },
     {
@@ -115,8 +132,11 @@ describe('F. Mensagens de validação em português', () => {
       auth: true,
       corpo: () => ({ texto: 1, concluida: 'sim' }),
       esperadas: [
-        'O campo texto deve ser um texto.',
-        'O campo concluida deve ser verdadeiro ou falso.',
+        { field: 'texto', message: 'Tarefa: deve ser um texto.' },
+        {
+          field: 'concluida',
+          message: 'Concluída: deve ser verdadeiro ou falso.',
+        },
       ],
     },
     {
@@ -130,9 +150,19 @@ describe('F. Mensagens de validação em português', () => {
         graficos: [{ titulo: '', imagemBase64: '***', extra: 1 }],
       }),
       esperadas: [
-        'O campo graficos.0.extra não deve existir.',
-        'O campo graficos.0.titulo é obrigatório.',
-        'O campo graficos.0.imagemBase64 deve estar codificado em base64.',
+        {
+          field: 'graficos.0.extra',
+          message: 'O campo graficos.0.extra não deve existir.',
+        },
+        {
+          field: 'graficos.0.titulo',
+          message: 'Título do gráfico: campo obrigatório.',
+        },
+        {
+          field: 'graficos.0.imagemBase64',
+          message:
+            'O campo graficos.0.imagemBase64 deve estar codificado em base64.',
+        },
       ],
     },
     {
@@ -146,7 +176,7 @@ describe('F. Mensagens de validação em português', () => {
         nivelDificuldade: 2,
         hack: 1,
       }),
-      esperadas: ['O campo hack não deve existir.'],
+      esperadas: [{ field: 'hack', message: 'O campo hack não deve existir.' }],
     },
   ];
 
@@ -157,15 +187,11 @@ describe('F. Mensagens de validação em português', () => {
       if (caso.auth) req.set(bearer(t.token));
       const res = await req.send(caso.corpo()).expect(400);
 
-      expect(res.body).toEqual({
-        statusCode: 400,
-        message: expect.any(Array),
-        timestamp: expect.any(String),
-        path: caso.url(),
-      });
-      for (const m of caso.esperadas) expect(res.body.message).toContain(m);
-      semIngles(res.body.message);
-      semRepeticao(res.body.message);
+      esperarErroValidacao(res.body);
+      for (const e of caso.esperadas)
+        expect(errosDe(res.body)).toContainEqual(e);
+      semIngles(mensagensDe(res.body));
+      semRepeticao(errosDe(res.body));
     },
   );
 
@@ -175,10 +201,13 @@ describe('F. Mensagens de validação em português', () => {
       .set(bearer(t.token))
       .send({ fase: 'XPTO' })
       .expect(400);
-    expect(res.body.message).toEqual([
-      expect.stringMatching(
-        /^O campo fase deve ser um dos seguintes valores: /,
-      ),
+    expect(errosDe(res.body)).toEqual([
+      {
+        field: 'fase',
+        message: expect.stringMatching(
+          /^O campo fase deve ser um dos seguintes valores: /,
+        ),
+      },
     ]);
   });
 
@@ -188,8 +217,11 @@ describe('F. Mensagens de validação em português', () => {
       .set(bearer(t.token))
       .send({ titulo: 'x', nivelDificuldade: 2 })
       .expect(400);
-    expect(res.body.message).toEqual([
-      'O identificador do atendimento é obrigatório.',
+    expect(errosDe(res.body)).toEqual([
+      {
+        field: 'atendimentoId',
+        message: 'O identificador do atendimento é obrigatório.',
+      },
     ]);
   });
 
@@ -199,8 +231,8 @@ describe('F. Mensagens de validação em português', () => {
       .query({ mes: 'abc', ano: 2027 })
       .set(bearer(t.token))
       .expect(400);
-    expect(res.body.message).toEqual([
-      'O mês deve ser um número inteiro de 1 a 12.',
+    expect(errosDe(res.body)).toEqual([
+      { field: 'mes', message: 'O mês deve ser um número inteiro de 1 a 12.' },
     ]);
   });
 
@@ -210,7 +242,9 @@ describe('F. Mensagens de validação em português', () => {
       .query({ foo: 'bar' })
       .set(bearer(t.token))
       .expect(400);
-    expect(res.body.message).toEqual(['O campo foo não deve existir.']);
+    expect(errosDe(res.body)).toEqual([
+      { field: 'foo', message: 'O campo foo não deve existir.' },
+    ]);
   });
 
   it('rota inexistente responde 404 em português', async () => {
@@ -218,7 +252,12 @@ describe('F. Mensagens de validação em português', () => {
       .get('/rota-que-nao-existe')
       .set(bearer(t.token))
       .expect(404);
-    expect(res.body.message).toBe('Rota não encontrada.');
+    // Erro genérico: só statusCode, code e message (sem path/stack)
+    expect(res.body).toEqual({
+      statusCode: 404,
+      code: 'NOT_FOUND',
+      message: 'Rota não encontrada.',
+    });
   });
 
   it('JSON malformado responde 400 em português', async () => {

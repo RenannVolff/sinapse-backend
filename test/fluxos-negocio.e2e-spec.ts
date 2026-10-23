@@ -8,6 +8,7 @@ import {
   horarioFuturo,
   Terapeuta,
 } from './helpers/fabrica';
+import { mensagensDe } from './helpers/erros';
 
 const MENSAGEM_CONFLITO = 'Já existe um atendimento agendado nesse horário.';
 
@@ -522,7 +523,8 @@ describe('C. Fluxos de negócio com persistência', () => {
         .send({ estrategias: 'Método fônico + jogos', dataFim: '2026-12-15' })
         .expect(200);
       expect(editado.body.estrategias).toBe('Método fônico + jogos');
-      expect(editado.body.dataFim).toBe('2026-12-15T00:00:00.000Z');
+      // Data só-dia gravada ao meio-dia UTC: não vira 14/12 no Brasil
+      expect(editado.body.dataFim).toBe('2026-12-15T12:00:00.000Z');
 
       const lido = await ctx.api
         .get(`/peis/${peiId}`)
@@ -1019,7 +1021,7 @@ describe('C. Fluxos de negócio com persistência', () => {
 
     const MSG_NIVEL =
       'O nível de dificuldade deve ser um número inteiro de 1 a 5.';
-    const MSG_TITULO = 'O título da atividade é obrigatório.';
+    const MSG_TITULO = 'Título da atividade: campo obrigatório.';
     const MSG_ATENDIMENTO = 'O identificador do atendimento é obrigatório.';
     const MSG_ATENDIMENTO_INVALIDO =
       'O identificador do atendimento é inválido.';
@@ -1076,7 +1078,7 @@ describe('C. Fluxos de negócio com persistência', () => {
           .set(bearer(t.token))
           .send(corpo)
           .expect(400);
-        expect(res.body.message).toContain(mensagem);
+        expect(mensagensDe(res.body)).toContainEqual(mensagem);
         expect(await ctx.prisma.atividade.count()).toBe(antes);
       },
     );
@@ -1117,7 +1119,7 @@ describe('C. Fluxos de negócio com persistência', () => {
           .set(bearer(t.token))
           .send(corpo)
           .expect(400);
-        expect(res.body.message).toContain(MSG_REALIZADO);
+        expect(mensagensDe(res.body)).toContain(MSG_REALIZADO);
         const item = await ctx.prisma.itemChecklist.findUniqueOrThrow({
           where: { id: itemId },
         });
@@ -1140,9 +1142,10 @@ describe('C. Fluxos de negócio com persistência', () => {
 
     const MSG_MES = 'O mês deve ser um número inteiro de 1 a 12.';
     const MSG_ANO = 'O ano deve ser um número inteiro entre 2000 e 2100.';
-    const MSG_INICIO =
-      'A data de início deve ser uma data válida (AAAA-MM-DD).';
-    const MSG_FIM = 'A data de fim deve ser uma data válida (AAAA-MM-DD).';
+    // Ausente ("campo obrigatório") ou inválida ("informe uma data válida"):
+    // a mensagem sempre vem com o rótulo do campo.
+    const MSG_INICIO = expect.stringMatching(/^Data de início: /) as string;
+    const MSG_FIM = expect.stringMatching(/^Data de fim: /) as string;
 
     beforeAll(async () => {
       t = await criarTerapeuta(ctx);
@@ -1166,8 +1169,8 @@ describe('C. Fluxos de negócio com persistência', () => {
           .query(query)
           .set(bearer(t.token))
           .expect(400);
-        expect(res.body.message).toContain(mensagem);
-        semMensagemEmIngles(res.body.message);
+        expect(mensagensDe(res.body)).toContainEqual(mensagem);
+        semMensagemEmIngles(mensagensDe(res.body));
       },
     );
 
@@ -1192,8 +1195,8 @@ describe('C. Fluxos de negócio com persistência', () => {
           .query(query)
           .set(bearer(t.token))
           .expect(400);
-        expect(res.body.message).toContain(mensagem);
-        semMensagemEmIngles(res.body.message);
+        expect(mensagensDe(res.body)).toContainEqual(mensagem);
+        semMensagemEmIngles(mensagensDe(res.body));
       },
     );
 
@@ -1216,8 +1219,8 @@ describe('C. Fluxos de negócio com persistência', () => {
           .query(query)
           .set(bearer(t.token))
           .expect(400);
-        expect(res.body.message).toContain(mensagem);
-        semMensagemEmIngles(res.body.message);
+        expect(mensagensDe(res.body)).toContainEqual(mensagem);
+        semMensagemEmIngles(mensagensDe(res.body));
       },
     );
 

@@ -9,6 +9,7 @@ import {
   Terapeuta,
 } from './helpers/fabrica';
 import { gerarPng } from './helpers/png';
+import { errosDe } from './helpers/erros';
 
 const MIME_DOCX =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -99,17 +100,22 @@ describe('D. Exportação', () => {
     });
 
     it('aceita nesta rota um corpo acima de 100kb (limite próprio de 15mb)', async () => {
-      const resumoGrande = Array.from(
-        { length: 2000 },
-        (_, i) =>
-          `Parágrafo ${i} do relatório com conteúdo suficiente para crescer.`,
-      ).join('\n\n');
-      expect(Buffer.byteLength(resumoGrande)).toBeGreaterThan(100 * 1024);
+      // O texto do relatório tem teto próprio; quem passa de 100kb são as
+      // imagens. Bytes depois do IEND são ignorados por leitores de PNG.
+      const pngGrande = Buffer.concat([
+        gerarPng(10, 10, [0, 0, 0]),
+        Buffer.alloc(120 * 1024),
+      ]).toString('base64');
+      expect(pngGrande.length).toBeGreaterThan(100 * 1024);
 
       await ctx.api
         .post(`/aprendentes/${aprendenteId}/exportar-docx`)
         .set(bearer(t.token))
-        .send({ nomeAprendente: 'Júlia', resumoIa: resumoGrande, graficos: [] })
+        .send({
+          nomeAprendente: 'Júlia',
+          resumoIa: 'Relatório',
+          graficos: [{ titulo: 'Gráfico', imagemBase64: pngGrande }],
+        })
         .buffer(true)
         .parse(lerBinario)
         .expect(201);
@@ -188,17 +194,22 @@ describe('D. Exportação', () => {
         .expect(413);
     });
 
-    it('aceita um corpo logo abaixo de 100kb (controle)', async () => {
-      await ctx.api
+    // Controle: logo abaixo de 100kb o parser aceita o corpo e quem recusa é
+    // a validação (400 no campo), não o limite de tamanho (413).
+    it('um corpo logo abaixo de 100kb passa pelo parser e cai no limite do campo (controle)', async () => {
+      const res = await ctx.api
         .post('/tarefas')
         .set(bearer(t.token))
         .send({ texto: 'Tarefa longa', notas: 'n'.repeat(90 * 1024) })
-        .expect(201);
+        .expect(400);
+      expect(errosDe(res.body)).toEqual([
+        { field: 'notas', message: 'Notas: máximo de 1000 caracteres.' },
+      ]);
     });
 
-    it('nenhum dado foi gravado pelas requisições rejeitadas com 413', async () => {
+    it('nenhum dado foi gravado pelas requisições rejeitadas', async () => {
       expect(await ctx.prisma.aprendente.count()).toBe(1);
-      expect(await ctx.prisma.tarefa.count()).toBe(1);
+      expect(await ctx.prisma.tarefa.count()).toBe(0);
     });
   });
 });
