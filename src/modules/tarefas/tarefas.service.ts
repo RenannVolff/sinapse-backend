@@ -2,6 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTarefaDto } from './dto/create-tarefa.dto';
 import { UpdateTarefaDto } from './dto/update-tarefa.dto';
+import { ListarTarefasQueryDto } from './dto/listar-tarefas-query.dto';
+
+const POR_PAGINA_PADRAO = 20;
 
 @Injectable()
 export class TarefasService {
@@ -17,11 +20,37 @@ export class TarefasService {
     });
   }
 
-  findAll(usuarioId: string) {
-    return this.prisma.tarefa.findMany({
-      where: { usuarioId, deletedAt: null },
-      orderBy: { criadoEm: 'desc' },
-    });
+  // Ordem previsível: pendentes primeiro, depois as mais recentes; o id
+  // desempata tarefas criadas no mesmo instante. Sem `pagina`/`porPagina`
+  // devolve TODAS (nenhum corte implícito).
+  async findAll(usuarioId: string, query: ListarTarefasQueryDto = {}) {
+    const where = { usuarioId, deletedAt: null };
+    const orderBy = [
+      { concluida: 'asc' as const },
+      { criadoEm: 'desc' as const },
+      { id: 'asc' as const },
+    ];
+
+    const paginado =
+      query.pagina !== undefined || query.porPagina !== undefined;
+    const pagina = query.pagina ?? 1;
+    const porPagina = query.porPagina ?? POR_PAGINA_PADRAO;
+
+    const [itens, total] = await this.prisma.$transaction([
+      this.prisma.tarefa.findMany({
+        where,
+        orderBy,
+        ...(paginado
+          ? { skip: (pagina - 1) * porPagina, take: porPagina }
+          : {}),
+      }),
+      this.prisma.tarefa.count({ where }),
+    ]);
+
+    return {
+      total,
+      resultado: paginado ? { itens, total, pagina, porPagina } : itens,
+    };
   }
 
   async findOne(id: string, usuarioId: string) {

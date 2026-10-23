@@ -8,11 +8,15 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
+  Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { TarefasService } from './tarefas.service';
 import { CreateTarefaDto } from './dto/create-tarefa.dto';
 import { UpdateTarefaDto } from './dto/update-tarefa.dto';
+import { ListarTarefasQueryDto } from './dto/listar-tarefas-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
@@ -32,9 +36,24 @@ export class TarefasController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lista as tarefas do terapeuta logado' })
-  findAll(@CurrentUser() user: AuthenticatedUser) {
-    return this.tarefasService.findAll(user.id);
+  @ApiOperation({
+    summary: 'Lista as tarefas do terapeuta logado',
+    description:
+      'Pendentes primeiro, depois as mais recentes. Sem `pagina`/`porPagina` ' +
+      'devolve a lista completa; com eles, devolve { itens, total, pagina, ' +
+      'porPagina }. O total também vai no cabeçalho X-Total-Count.',
+  })
+  async findAll(
+    @Query() query: ListarTarefasQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { total, resultado } = await this.tarefasService.findAll(
+      user.id,
+      query,
+    );
+    res.setHeader('X-Total-Count', String(total));
+    return resultado;
   }
 
   @Patch(':id')
