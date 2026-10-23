@@ -71,5 +71,14 @@ export function configureApp(app: NestExpressApplication): void {
   // Só as origens de FRONTEND_URL (+ Vite local fora de produção). Origem
   // fora da lista recebe a resposta sem Access-Control-Allow-Origin, e o
   // navegador bloqueia a leitura.
-  app.enableCors({ origin: origensPermitidasCors() });
+  // exposedHeaders: o navegador só deixa o front ler cabeçalhos listados aqui.
+  app.enableCors({
+    origin: origensPermitidasCors(),
+    exposedHeaders: [
+      'X-Total-Count',
+      'X-Periodo-Inicio',
+      'X-Periodo-Fim',
+      'X-Periodo-Invertido',
+    ],
+  });
 }

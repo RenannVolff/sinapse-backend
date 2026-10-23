@@ -4,7 +4,10 @@ import {
   Get,
   Param,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { normalizarPeriodo } from '../../common/utils/datas';
 import { RelatoriosService } from './relatorios.service';
 import type { AgrupamentoFrequencia } from './relatorios.service';
 import { EvolucaoQueryDto } from './dto/evolucao-query.dto';
@@ -42,16 +45,21 @@ export class RelatoriosController {
     @Param('aprendenteId') aprendenteId: string,
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: EvolucaoQueryDto,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    // Datas já validadas pelo EvolucaoQueryDto (ausentes = sem filtro)
-    const dataInicio = query.inicio ? new Date(query.inicio) : undefined;
-    const dataFim = query.fim ? new Date(query.fim) : undefined;
+    // Dias inteiros no fuso de Brasília (antes, `fim` cortava o próprio dia
+    // às 00h UTC); invertido é trocado. O corpo continua sendo a lista, então
+    // o período efetivo vai nos cabeçalhos X-Periodo-*.
+    const periodo = normalizarPeriodo(query.inicio, query.fim);
+    if (periodo.inicio) res.setHeader('X-Periodo-Inicio', periodo.inicio);
+    if (periodo.fim) res.setHeader('X-Periodo-Fim', periodo.fim);
+    res.setHeader('X-Periodo-Invertido', String(periodo.invertido));
 
     return this.service.gerarGraficoEvolucao(
       aprendenteId,
       user.id,
-      dataInicio,
-      dataFim,
+      periodo.desde,
+      periodo.ate,
     );
   }
 

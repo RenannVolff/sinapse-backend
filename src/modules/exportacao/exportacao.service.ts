@@ -16,6 +16,12 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { AVISO_REVISAO_PADRAO } from '../ia/ia.service';
 import { ExportarDocxDto } from './dto/exportar-docx.dto';
+import {
+  extrairDia,
+  formatarDiaBr,
+  hojeNoFuso,
+  normalizarPeriodo,
+} from '../../common/utils/datas';
 
 const LARGURA_MAXIMA_IMAGEM_PX = 550;
 const PNG_ASSINATURA = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -42,6 +48,8 @@ export class ExportacaoService {
       throw new NotFoundException('Aprendente não encontrado.');
     }
 
+    const periodo = this.formatarPeriodo(dto.periodoInicio, dto.periodoFim);
+
     const documento = new Document({
       sections: [
         {
@@ -51,9 +59,12 @@ export class ExportacaoService {
               text: `Relatório de Acompanhamento — ${dto.nomeAprendente}`,
             }),
             new Paragraph({
-              text: `Gerado em: ${this.formatarDataHoje()}`,
-              spacing: { after: 200 },
+              text: `Gerado em: ${this.formatarEmissao(dto.dataEmissao)}`,
+              spacing: { after: periodo ? 0 : 200 },
             }),
+            ...(periodo
+              ? [new Paragraph({ text: periodo, spacing: { after: 200 } })]
+              : []),
             ...this.montarParagrafosResumo(dto.resumoIa),
             ...this.montarSecoesGraficos(dto.graficos),
             this.montarParagrafoAviso(
@@ -72,12 +83,27 @@ export class ExportacaoService {
     };
   }
 
-  private formatarDataHoje(): string {
-    const hoje = new Date();
-    const dia = String(hoje.getDate()).padStart(2, '0');
-    const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-    const ano = hoje.getFullYear();
-    return `${dia}/${mes}/${ano}`;
+  // Sem data informada, usa hoje no fuso de Brasília: o servidor roda em
+  // UTC e, depois das 21h, `new Date()` local já seria o dia seguinte.
+  private formatarEmissao(dataEmissao?: string): string {
+    return formatarDiaBr(
+      (dataEmissao && extrairDia(dataEmissao)) || hojeNoFuso(),
+    );
+  }
+
+  // Período invertido é trocado, como nos filtros de relatório.
+  private formatarPeriodo(inicio?: string, fim?: string): string | null {
+    const periodo = normalizarPeriodo(inicio, fim);
+    if (periodo.inicio && periodo.fim) {
+      return `Período analisado: ${formatarDiaBr(periodo.inicio)} a ${formatarDiaBr(periodo.fim)}`;
+    }
+    if (periodo.inicio) {
+      return `Período analisado: a partir de ${formatarDiaBr(periodo.inicio)}`;
+    }
+    if (periodo.fim) {
+      return `Período analisado: até ${formatarDiaBr(periodo.fim)}`;
+    }
+    return null;
   }
 
   private montarParagrafosResumo(resumoIa: string): Paragraph[] {

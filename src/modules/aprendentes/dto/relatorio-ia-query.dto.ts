@@ -1,16 +1,11 @@
-import { IsDateString } from 'class-validator';
+import { CampoDataDia } from '../../../common/validation/campos.decorators';
 
 // Período do relatório inteligente; o frontend sempre envia as duas datas.
+// Período invertido não é erro: o service troca as datas (ver normalizarPeriodo).
 export class RelatorioIaQueryDto {
-  @IsDateString(
-    {},
-    { message: 'A data de início deve ser uma data válida (AAAA-MM-DD).' },
-  )
+  @CampoDataDia('Data de início')
   inicio!: string;
 
-  @IsDateString(
-    {},
-    { message: 'A data de fim deve ser uma data válida (AAAA-MM-DD).' },
-  )
+  @CampoDataDia('Data de fim')
   fim!: string;
 }
