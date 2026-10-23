@@ -2,10 +2,30 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePeiDto } from './dto/create-pei.dto';
 import { UpdatePeiDto } from './dto/update-pei.dto';
+import { diaParaArmazenar, extrairDia } from '../../common/utils/datas';
+import { excecaoValidacao } from '../../common/validation/mensagens-validacao';
+
+// Data só-dia já validada pelo DTO; gravada ao meio-dia UTC (ver datas.ts)
+function dataDia(valor: string): Date {
+  return diaParaArmazenar(extrairDia(valor) ?? valor);
+}
 
 @Injectable()
 export class PeiService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // Fim antes do início é incoerente num plano (diferente de um filtro de
+  // relatório, aqui não se troca sozinho: o profissional corrige).
+  private validarVigencia(dataInicio: Date, dataFim: Date | null): void {
+    if (dataFim && dataFim.getTime() < dataInicio.getTime()) {
+      throw excecaoValidacao([
+        {
+          field: 'dataFim',
+          message: 'Data de fim: deve ser igual ou posterior à data de início.',
+        },
+      ]);
+    }
+  }
 
   async create(data: CreatePeiDto, usuarioId: string) {
     const aprendente = await this.prisma.aprendente.findFirst({
@@ -21,14 +41,18 @@ export class PeiService {
         throw new NotFoundException('Template de PEI não encontrado.');
     }
 
+    const dataInicio = dataDia(data.dataInicio);
+    const dataFim = data.dataFim ? dataDia(data.dataFim) : null;
+    this.validarVigencia(dataInicio, dataFim);
+
     return this.prisma.pEI.create({
       data: {
         aprendenteId: data.aprendenteId,
         dificuldades: data.dificuldades,
         objetivos: data.objetivos,
         estrategias: data.estrategias,
-        dataInicio: new Date(data.dataInicio),
-        dataFim: data.dataFim ? new Date(data.dataFim) : undefined,
+        dataInicio,
+        dataFim,
         templateOrigemId: data.templateOrigemId,
       },
     });
@@ -41,7 +65,7 @@ export class PeiService {
         deletedAt: null,
         ...(aprendenteId ? { aprendenteId } : {}),
       },
-      orderBy: { criadoEm: 'desc' },
+      orderBy: [{ criadoEm: 'desc' }, { id: 'asc' }],
     });
   }
 
@@ -58,7 +82,19 @@ export class PeiService {
   }
 
   async update(id: string, data: UpdatePeiDto, usuarioId: string) {
-    await this.findOne(id, usuarioId);
+    const atual = await this.findOne(id, usuarioId);
+
+    // Campo omitido mantém o gravado; `dataFim: null` remove o fim do plano.
+    const dataInicio = data.dataInicio
+      ? dataDia(data.dataInicio)
+      : atual.dataInicio;
+    const dataFim =
+      data.dataFim === undefined
+        ? atual.dataFim
+        : data.dataFim === null
+          ? null
+          : dataDia(data.dataFim);
+    this.validarVigencia(dataInicio, dataFim);
 
     return this.prisma.pEI.update({
       where: { id },
@@ -66,8 +102,8 @@ export class PeiService {
         dificuldades: data.dificuldades,
         objetivos: data.objetivos,
         estrategias: data.estrategias,
-        dataInicio: data.dataInicio ? new Date(data.dataInicio) : undefined,
-        dataFim: data.dataFim ? new Date(data.dataFim) : undefined,
+        dataInicio,
+        dataFim,
       },
     });
   }
