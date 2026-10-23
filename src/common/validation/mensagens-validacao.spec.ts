@@ -23,6 +23,7 @@ import {
 } from 'class-validator';
 import {
   exceptionFactoryValidacao,
+  traduzirErrosPorCampo,
   traduzirErrosValidacao,
 } from './mensagens-validacao';
 
@@ -189,7 +190,7 @@ describe('exceptionFactoryValidacao', () => {
     ).toEqual(['O campo site tem um valor inválido.']);
   });
 
-  it('devolve um 400 no formato padrão do Nest, sem nenhuma mensagem em inglês', async () => {
+  it('devolve um 400 no formato do contrato, um item por campo, sem inglês', async () => {
     const erros = await validate(
       plainToInstance(PadraoDto, { texto: 1, email: 'x', hack: 1 }),
       { whitelist: true, forbidNonWhitelisted: true },
@@ -199,8 +200,32 @@ describe('exceptionFactoryValidacao', () => {
 
     expect(excecao).toBeInstanceOf(BadRequestException);
     expect(excecao.getStatus()).toBe(400);
-    const resposta = excecao.getResponse() as { message: string[] };
-    expect(resposta.message).toHaveLength(3);
-    for (const m of resposta.message) expect(m).not.toMatch(INGLES);
+    const resposta = excecao.getResponse() as {
+      statusCode: number;
+      code: string;
+      message: string;
+      errors: { field: string; message: string }[];
+    };
+    expect(resposta.statusCode).toBe(400);
+    expect(resposta.code).toBe('VALIDATION_ERROR');
+    expect(resposta.message).toBe('Revise os campos destacados.');
+    expect(resposta.errors.map((e) => e.field).sort()).toEqual([
+      'email',
+      'hack',
+      'texto',
+    ]);
+    for (const e of resposta.errors) expect(e.message).not.toMatch(INGLES);
+  });
+
+  it('usa o caminho completo como `field` em erros aninhados', async () => {
+    const erros = await validate(
+      plainToInstance(AninhadoDto, { itens: [{ titulo: 'ok' }, {}] }),
+    );
+    expect(traduzirErrosPorCampo(erros)).toEqual([
+      {
+        field: 'itens.1.titulo',
+        message: 'O campo itens.1.titulo é obrigatório.',
+      },
+    ]);
   });
 });

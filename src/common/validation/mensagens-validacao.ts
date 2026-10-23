@@ -164,10 +164,18 @@ function traduzirMensagem(
   return mensagem;
 }
 
-function coletarMensagens(
+export interface ErroCampo {
+  field: string;
+  message: string;
+}
+
+export const CODIGO_ERRO_VALIDACAO = 'VALIDATION_ERROR';
+export const MENSAGEM_ERRO_VALIDACAO = 'Revise os campos destacados.';
+
+function coletarErros(
   erros: ValidationError[],
   caminhoPai: string,
-  saida: string[],
+  saida: ErroCampo[],
 ): void {
   for (const erro of erros) {
     const caminho = caminhoPai
@@ -179,25 +187,53 @@ function coletarMensagens(
     );
 
     for (const [nome, mensagem] of presenca.length ? presenca : restricoes) {
-      saida.push(traduzirMensagem(nome, mensagem, erro.property, caminho));
+      saida.push({
+        field: caminho,
+        message: traduzirMensagem(nome, mensagem, erro.property, caminho),
+      });
     }
 
     if (erro.children?.length) {
-      coletarMensagens(erro.children, caminho, saida);
+      coletarErros(erro.children, caminho, saida);
     }
   }
 }
 
-export function traduzirErrosValidacao(erros: ValidationError[]): string[] {
-  const mensagens: string[] = [];
-  coletarMensagens(erros, '', mensagens);
-  return [...new Set(mensagens)];
+// Um item por campo/violação, sem repetir a mesma mensagem no mesmo campo.
+// `field` é o caminho do campo como o front enviou (ex: graficos.0.titulo).
+export function traduzirErrosPorCampo(erros: ValidationError[]): ErroCampo[] {
+  const saida: ErroCampo[] = [];
+  coletarErros(erros, '', saida);
+  const vistos = new Set<string>();
+  return saida.filter(({ field, message }) => {
+    const chave = `${field}|${message}`;
+    if (vistos.has(chave)) return false;
+    vistos.add(chave);
+    return true;
+  });
 }
 
-// exceptionFactory do ValidationPipe: mesmo formato da resposta padrão do
-// Nest (400 com `message: string[]`), só que em português e sem repetição.
+export function traduzirErrosValidacao(erros: ValidationError[]): string[] {
+  return [
+    ...new Set(traduzirErrosPorCampo(erros).map(({ message }) => message)),
+  ];
+}
+
+// 400 no formato do contrato com o front:
+// { statusCode, code: 'VALIDATION_ERROR', message, errors: [{ field, message }] }
+// Usado pelo ValidationPipe e pelos services, para regras que dependem do
+// banco (ex: data de fim do PEI anterior à data de início já gravada).
+export function excecaoValidacao(erros: ErroCampo[]): BadRequestException {
+  return new BadRequestException({
+    statusCode: 400,
+    code: CODIGO_ERRO_VALIDACAO,
+    message: MENSAGEM_ERRO_VALIDACAO,
+    errors: erros,
+  });
+}
+
 export function exceptionFactoryValidacao(
   erros: ValidationError[],
 ): BadRequestException {
-  return new BadRequestException(traduzirErrosValidacao(erros));
+  return excecaoValidacao(traduzirErrosPorCampo(erros));
 }
