@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { LIMITES } from '../../../common/validation/limits.constants';
 
 export class VerificarLoginDoisFatoresDto {
   @ApiProperty({
@@ -9,6 +10,9 @@ export class VerificarLoginDoisFatoresDto {
   })
   @IsString()
   @IsNotEmpty({ message: 'O token temporário é obrigatório' })
+  @MaxLength(LIMITES.TOKEN_JWT, {
+    message: 'Token temporário: formato inválido.',
+  })
   tokenTemporario!: string;
 
   @ApiProperty({
@@ -17,6 +21,8 @@ export class VerificarLoginDoisFatoresDto {
   })
   @IsString()
   @IsNotEmpty({ message: 'O código é obrigatório' })
-  @MaxLength(20)
+  @MaxLength(LIMITES.CODIGO_2FA, {
+    message: `Código: máximo de ${LIMITES.CODIGO_2FA} caracteres.`,
+  })
   codigo!: string;
 }

@@ -1,11 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  IsIn,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUUID,
-} from 'class-validator';
+import { IsIn, IsNotEmpty, IsUUID } from 'class-validator';
+import { CampoTexto } from '../../../common/validation/campos.decorators';
+import { LIMITES } from '../../../common/validation/limits.constants';
 
 const NIVEIS_DIFICULDADE = [1, 2, 3, 4, 5];
 const MENSAGEM_NIVEL =
@@ -25,17 +21,17 @@ export class CreateAtividadeDto {
   @ApiProperty({
     description: 'Título da atividade',
     example: 'Rimas com figuras',
+    maxLength: LIMITES.TITULO,
   })
-  @IsString({ message: 'O título da atividade deve ser um texto.' })
-  @IsNotEmpty({ message: 'O título da atividade é obrigatório.' })
+  @CampoTexto('Título da atividade', LIMITES.TITULO)
   titulo!: string;
 
   // Mesmo intervalo do seletor do frontend (1 - Iniciante ... 5 - Avançado).
   // É o peso da atividade no score ponderado da sessão.
   @ApiProperty({
     description: 'Nível de dificuldade (1 a 5)',
-    minimum: 1,
-    maximum: 5,
+    minimum: LIMITES.NIVEL_DIFICULDADE_MIN,
+    maximum: LIMITES.NIVEL_DIFICULDADE_MAX,
     example: 3,
   })
   // Um único validador (e não IsInt + Min + Max) para o erro sair uma vez só;
@@ -46,8 +42,11 @@ export class CreateAtividadeDto {
   @ApiPropertyOptional({
     description: 'Observação geral final',
     example: 'Precisou de apoio visual nas duas primeiras tentativas.',
+    maxLength: LIMITES.TEXTO_MEDIO,
   })
-  @IsString({ message: 'A observação deve ser um texto.' })
-  @IsOptional()
+  @CampoTexto('Observação', LIMITES.TEXTO_MEDIO, {
+    obrigatorio: false,
+    permitirVazio: true,
+  })
   observacao?: string;
 }
