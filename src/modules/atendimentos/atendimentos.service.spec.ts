@@ -350,3 +350,107 @@ describe('AtendimentosService - conflito de horário na edição', () => {
     expect(prisma.atendimento.findMany).not.toHaveBeenCalled();
   });
 });
+
+describe('AtendimentosService - edição de sessão (data passada e FALTA/CANCELADO)', () => {
+  const passada: AtendimentoFake & { concluido: boolean } = {
+    id: 'passada',
+    dataAtendimento: new Date('2020-05-04T13:00:00.000Z'),
+    duracaoMinutos: 60,
+    status: StatusAtendimento.CONCLUIDO,
+    deletedAt: null,
+    concluido: true,
+  };
+
+  function dadosDoUpdate(prisma: ReturnType<typeof criarPrismaMock>) {
+    const [[{ data }]] = prisma.atendimento.update.mock.calls as [
+      [{ data: unknown }],
+    ];
+    return data;
+  }
+
+  function prismaCom(atual: AtendimentoFake & { concluido: boolean }) {
+    const prisma = criarPrismaMock([atual]);
+    prisma.atendimento.findFirst.mockResolvedValue({
+      ...atual,
+      aprendente: { nomeCompleto: 'Aprendente' },
+      atividades: [],
+    });
+    return prisma;
+  }
+
+  it('aceita reenviar a data original (já no passado) ao corrigir a observação', async () => {
+    const prisma = prismaCom(passada);
+
+    await criarServico(prisma).update(
+      'passada',
+      {
+        dataAtendimento: passada.dataAtendimento.toISOString(),
+        observacoes: 'Correção da observação',
+      },
+      USUARIO_ID,
+    );
+
+    const data = dadosDoUpdate(prisma);
+    expect(data).toEqual({ observacoes: 'Correção da observação' });
+  });
+
+  it('rejeita mover a sessão para uma data passada, com erro no campo', async () => {
+    const prisma = prismaCom({
+      ...passada,
+      dataAtendimento: new Date('2030-03-10T10:00:00.000Z'),
+    });
+
+    await expect(
+      criarServico(prisma).update(
+        'passada',
+        { dataAtendimento: '2020-01-01T10:00:00.000Z' },
+        USUARIO_ID,
+      ),
+    ).rejects.toMatchObject({
+      response: {
+        code: 'VALIDATION_ERROR',
+        errors: [expect.objectContaining({ field: 'dataAtendimento' })],
+      },
+    });
+    expect(prisma.atendimento.update).not.toHaveBeenCalled();
+  });
+
+  it.each([StatusAtendimento.FALTA, StatusAtendimento.CANCELADO])(
+    'ao mudar para %s, desmarca concluido (sai das métricas)',
+    async (status) => {
+      const prisma = prismaCom(passada);
+
+      await criarServico(prisma).update('passada', { status }, USUARIO_ID);
+
+      const data = dadosDoUpdate(prisma);
+      expect(data).toMatchObject({ status, concluido: false });
+    },
+  );
+
+  it('rejeita FALTA junto com concluido=true', async () => {
+    const prisma = prismaCom(passada);
+
+    await expect(
+      criarServico(prisma).update(
+        'passada',
+        { status: StatusAtendimento.FALTA, concluido: true },
+        USUARIO_ID,
+      ),
+    ).rejects.toMatchObject({
+      response: { errors: [expect.objectContaining({ field: 'concluido' })] },
+    });
+  });
+
+  it('PATCH de status para FALTA também desmarca concluido', async () => {
+    const prisma = prismaCom(passada);
+
+    await criarServico(prisma).atualizarStatus(
+      'passada',
+      StatusAtendimento.FALTA,
+      USUARIO_ID,
+    );
+
+    const data = dadosDoUpdate(prisma);
+    expect(data).toEqual({ status: StatusAtendimento.FALTA, concluido: false });
+  });
+});

@@ -85,7 +85,9 @@ describe('UpdateAtendimentoDto.dataAtendimento', () => {
     expect(mensagens).toContain('Data inválida');
   });
 
-  it('rejeita uma data passada', async () => {
+  // A edição reenvia a data original de sessões já realizadas; a regra de
+  // "não mover para o passado" fica no service (só quando a data muda).
+  it('não rejeita no DTO uma data passada (checada no service)', async () => {
     const ontem = new Date();
     ontem.setDate(ontem.getDate() - 1);
 
@@ -95,9 +97,7 @@ describe('UpdateAtendimentoDto.dataAtendimento', () => {
       'dataAtendimento',
     );
 
-    expect(mensagens).toContain(
-      'Não é possível agendar um atendimento em uma data anterior a hoje.',
-    );
+    expect(mensagens).toEqual([]);
   });
 
   it('aceita uma data futura', async () => {

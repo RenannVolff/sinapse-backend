@@ -7,19 +7,34 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma, StatusAtendimento, FaseAtendimento } from '@prisma/client';
 import {
-  IsString,
   IsNotEmpty,
   IsOptional,
   IsBoolean,
   IsEnum,
   IsInt,
   IsDateString,
+  IsUUID,
   Max,
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateNotInPast } from '../../common/validators/is-date-not-in-past.validator';
+import {
+  IsDateNotInPast,
+  IsDateNotInPastConstraint,
+} from '../../common/validators/is-date-not-in-past.validator';
+import { CampoTexto } from '../../common/validation/campos.decorators';
+import { LIMITES } from '../../common/validation/limits.constants';
+import { excecaoValidacao } from '../../common/validation/mensagens-validacao';
+
+// Status em que a sessão não aconteceu: nunca contam como concluídas nas
+// métricas (FALTA = não compareceu; CANCELADO = desmarcada antes).
+const STATUS_SEM_SESSAO: StatusAtendimento[] = [
+  StatusAtendimento.FALTA,
+  StatusAtendimento.CANCELADO,
+];
+
+const MENSAGEM_STATUS = `Status: deve ser um dos valores ${Object.values(StatusAtendimento).join(', ')}.`;
 
 export class CreateAtendimentoDto {
   @ApiProperty({
@@ -27,7 +42,7 @@ export class CreateAtendimentoDto {
     example: '3f2b8c1e-7a4d-4e9b-9c0a-1d2e3f4a5b6c',
   })
   @IsNotEmpty({ message: 'O identificador do aprendente é obrigatório.' })
-  @IsString()
+  @IsUUID('all', { message: 'O identificador do aprendente é inválido.' })
   aprendenteId!: string;
 
   @ApiProperty({
@@ -55,17 +70,20 @@ export class CreateAtendimentoDto {
   @ApiProperty({
     description: 'Título da sessão',
     example: 'Consciência fonológica',
+    maxLength: LIMITES.TITULO,
   })
-  @IsNotEmpty({ message: 'O título da sessão é obrigatório.' })
-  @IsString()
+  @CampoTexto('Título da sessão', LIMITES.TITULO)
   tituloSessao!: string;
 
   @ApiPropertyOptional({
-    description: 'Observações livres da sessão',
+    description: 'Observações livres da sessão (evolução)',
     example: 'Demonstrou boa atenção sustentada.',
+    maxLength: LIMITES.TEXTO_LONGO,
   })
-  @IsOptional()
-  @IsString()
+  @CampoTexto('Observações', LIMITES.TEXTO_LONGO, {
+    obrigatorio: false,
+    permitirVazio: true,
+  })
   observacoes?: string;
 
   // Sobrescrita pontual da fase; se omitido, usa aprendente.faseAtual no momento da criação.
@@ -74,19 +92,24 @@ export class CreateAtendimentoDto {
     enum: FaseAtendimento,
   })
   @IsOptional()
-  @IsEnum(FaseAtendimento)
+  @IsEnum(FaseAtendimento, {
+    message: 'Fase: deve ser LINHA_BASE ou INTERVENCAO.',
+  })
   fase?: FaseAtendimento;
 }
 
 export class UpdateAtendimentoDto {
+  // Sem @IsDateNotInPast aqui: editar uma sessão já realizada (ex: corrigir
+  // a observação) reenvia a data original, que está no passado. A regra de
+  // "não agendar no passado" vale só quando a data muda (ver update()).
   @ApiPropertyOptional({
-    description: 'Nova data e hora da sessão (ISO 8601)',
+    description:
+      'Nova data e hora da sessão (ISO 8601). Não pode ir para o passado; reenviar a data atual é aceito.',
     example: '2026-11-17T14:00:00.000Z',
     type: String,
   })
   @IsOptional()
   @IsDateString({}, { message: 'Data inválida' })
-  @IsDateNotInPast()
   dataAtendimento?: string | Date;
 
   @ApiPropertyOptional({
@@ -102,30 +125,38 @@ export class UpdateAtendimentoDto {
   @ApiPropertyOptional({
     description: 'Título da sessão',
     example: 'Consciência fonológica',
+    maxLength: LIMITES.TITULO,
   })
-  @IsOptional()
-  @IsString()
+  @CampoTexto('Título da sessão', LIMITES.TITULO, { obrigatorio: false })
   tituloSessao?: string;
 
   @ApiPropertyOptional({
-    description: 'Observações livres da sessão',
+    description: 'Observações livres da sessão (vazio apaga)',
     example: 'Demonstrou boa atenção sustentada.',
+    maxLength: LIMITES.TEXTO_LONGO,
   })
-  @IsOptional()
-  @IsString()
+  @CampoTexto('Observações', LIMITES.TEXTO_LONGO, {
+    obrigatorio: false,
+    permitirVazio: true,
+  })
   observacoes?: string;
 
   @ApiPropertyOptional({
+    description:
+      'FALTA = não compareceu; CANCELADO = cancelada previamente. Ambos desmarcam `concluido`.',
     enum: StatusAtendimento,
     example: 'CONCLUIDO',
   })
   @IsOptional()
-  @IsEnum(StatusAtendimento)
+  @IsEnum(StatusAtendimento, { message: MENSAGEM_STATUS })
   status?: StatusAtendimento;
 
-  @ApiPropertyOptional({ example: true })
+  @ApiPropertyOptional({
+    description: 'Sessão finalizada (entra nas métricas e relatórios)',
+    example: true,
+  })
   @IsOptional()
-  @IsBoolean()
+  @IsBoolean({ message: 'Concluído: deve ser verdadeiro ou falso.' })
   concluido?: boolean;
 }
 
@@ -154,7 +185,7 @@ export class UpdateStatusAtendimentoDto {
     example: 'FALTA',
   })
   @IsNotEmpty({ message: 'O status é obrigatório.' })
-  @IsEnum(StatusAtendimento)
+  @IsEnum(StatusAtendimento, { message: MENSAGEM_STATUS })
   status!: StatusAtendimento;
 }
 
@@ -188,7 +219,11 @@ export class AtendimentosService {
         },
       });
     } catch (error) {
-      console.error('Erro no Prisma ao criar agendamento:', error);
+      // Só o código: a mensagem do Prisma repete os dados da sessão (LGPD)
+      console.error(
+        'Erro no Prisma ao criar agendamento:',
+        (error as { code?: string }).code ?? (error as Error).name,
+      );
       throw new InternalServerErrorException(
         'Erro ao criar agendamento no banco de dados.',
       );
@@ -276,6 +311,30 @@ export class AtendimentosService {
   async update(id: string, data: UpdateAtendimentoDto, usuarioId: string) {
     const atual = await this.findOne(id, usuarioId);
 
+    const novaData = data.dataAtendimento
+      ? new Date(data.dataAtendimento)
+      : undefined;
+    const dataMudou =
+      !!novaData && novaData.getTime() !== atual.dataAtendimento.getTime();
+    if (
+      dataMudou &&
+      !new IsDateNotInPastConstraint().validate(String(data.dataAtendimento))
+    ) {
+      throw excecaoValidacao([
+        {
+          field: 'dataAtendimento',
+          message:
+            'Não é possível agendar um atendimento em uma data anterior a hoje.',
+        },
+      ]);
+    }
+
+    const concluidoFinal = this.resolverConcluido(
+      data.status ?? atual.status,
+      data.concluido,
+      atual.concluido,
+    );
+
     // Campo omitido no payload mantém o valor atual. Se o atendimento vai
     // ficar CANCELADO, não ocupa horário e não há o que checar. Reativar um
     // CANCELADO volta a ocupar o horário, mesmo sem mudar data/duração.
@@ -289,9 +348,7 @@ export class AtendimentosService {
         reativando) &&
       statusFinal !== StatusAtendimento.CANCELADO
     ) {
-      const inicio = data.dataAtendimento
-        ? new Date(data.dataAtendimento)
-        : atual.dataAtendimento;
+      const inicio = novaData ?? atual.dataAtendimento;
       const duracao = data.duracaoMinutos ?? atual.duracaoMinutos;
       const fim = new Date(inicio.getTime() + duracao * 60000);
       await this.verificarConflitoHorario(usuarioId, inicio, fim, id);
@@ -303,10 +360,9 @@ export class AtendimentosService {
     if (data.observacoes !== undefined)
       dadosAtualizados.observacoes = data.observacoes;
     if (data.status) dadosAtualizados.status = data.status;
-    if (data.concluido !== undefined)
-      dadosAtualizados.concluido = data.concluido;
-    if (data.dataAtendimento)
-      dadosAtualizados.dataAtendimento = new Date(data.dataAtendimento);
+    if (concluidoFinal !== atual.concluido)
+      dadosAtualizados.concluido = concluidoFinal;
+    if (dataMudou) dadosAtualizados.dataAtendimento = novaData;
     if (data.duracaoMinutos !== undefined)
       dadosAtualizados.duracaoMinutos = data.duracaoMinutos;
 
@@ -316,7 +372,11 @@ export class AtendimentosService {
         data: dadosAtualizados,
       });
     } catch (error) {
-      console.error('Erro no Prisma ao atualizar agendamento:', error);
+      // Só o código: a mensagem do Prisma repete os dados da sessão (LGPD)
+      console.error(
+        'Erro no Prisma ao atualizar agendamento:',
+        (error as { code?: string }).code ?? (error as Error).name,
+      );
       throw new InternalServerErrorException(
         'Erro ao atualizar a sessão no banco de dados.',
       );
@@ -351,8 +411,35 @@ export class AtendimentosService {
 
     return this.prisma.atendimento.update({
       where: { id },
-      data: { status },
+      data: {
+        status,
+        concluido: this.resolverConcluido(status, undefined, atual.concluido),
+      },
     });
+  }
+
+  // FALTA ≠ CANCELADO, mas nenhum dos dois é sessão realizada: ao entrar
+  // num deles a sessão deixa de ser "concluída" (sai das métricas, que são
+  // calculadas na hora a partir de `concluido`). Pedir os dois juntos é
+  // contraditório e vira 400 no campo.
+  private resolverConcluido(
+    statusFinal: StatusAtendimento,
+    concluidoPedido: boolean | undefined,
+    concluidoAtual: boolean,
+  ): boolean {
+    if (STATUS_SEM_SESSAO.includes(statusFinal)) {
+      if (concluidoPedido === true) {
+        throw excecaoValidacao([
+          {
+            field: 'concluido',
+            message:
+              'Concluído: uma sessão com FALTA ou CANCELADO não pode ser marcada como concluída.',
+          },
+        ]);
+      }
+      return false;
+    }
+    return concluidoPedido ?? concluidoAtual;
   }
 
   async remove(id: string, usuarioId: string) {
