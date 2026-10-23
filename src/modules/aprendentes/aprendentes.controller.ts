@@ -19,6 +19,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { AprendentesService } from './aprendentes.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
+import { UpdateAprendenteDto } from './dto/update-aprendente.dto';
 import { UpdateFaseAprendenteDto } from './dto/update-fase-aprendente.dto';
 import { RelatorioIaQueryDto } from './dto/relatorio-ia-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -49,6 +50,18 @@ export class AprendentesController {
   @ApiOperation({ summary: 'Busca os detalhes e histórico de um aprendente' })
   findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.aprendentesService.findOne(id, user.id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Edita os dados cadastrais de um aprendente (envio parcial)',
+  })
+  update(
+    @Param('id') id: string,
+    @Body() updateDto: UpdateAprendenteDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.aprendentesService.update(id, updateDto, user.id);
   }
 
   @Patch(':id/fase')
@@ -85,7 +98,8 @@ export class AprendentesController {
   @ApiQuery({
     name: 'inicio',
     required: true,
-    description: 'Data de início (YYYY-MM-DD)',
+    description:
+      'Data de início (YYYY-MM-DD). Se vier depois do fim, as datas são trocadas e `periodo.invertido` volta true.',
   })
   @ApiQuery({
     name: 'fim',

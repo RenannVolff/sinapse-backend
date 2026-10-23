@@ -1,36 +1,44 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNotEmpty, IsString } from 'class-validator';
+import {
+  CampoDataDia,
+  CampoNomePessoa,
+  CampoTelefone,
+} from '../../../common/validation/campos.decorators';
+import { LIMITES } from '../../../common/validation/limits.constants';
 
 // DTO para criar um novo aprendente
 export class CreateAprendenteDto {
   @ApiProperty({
     description: 'Nome completo do aprendente',
     example: 'Maria Souza',
+    maxLength: LIMITES.NOME_PESSOA,
   })
-  @IsString()
-  @IsNotEmpty()
+  @CampoNomePessoa('Nome completo')
   nomeCompleto!: string;
-  // Adicionando o campo de data de nascimento
+
   @ApiProperty({
-    description: 'Data de nascimento (Formato ISO 8601)',
+    description: `Data de nascimento (AAAA-MM-DD), sem data futura nem anterior a ${LIMITES.IDADE_MAX_ANOS} anos`,
     example: '2017-03-15',
   })
-  @IsDateString({}, { message: 'Data inválida' })
+  @CampoDataDia('Data de nascimento', {
+    naoFutura: true,
+    anosAtrasMax: LIMITES.IDADE_MAX_ANOS,
+  })
   dataNascimento!: string;
-  // Campo para o nome do responsável legal
+
   @ApiProperty({
     description: 'Nome do responsável legal',
     example: 'Ana Souza',
+    maxLength: LIMITES.NOME_PESSOA,
   })
-  @IsString()
-  @IsNotEmpty()
+  @CampoNomePessoa('Responsável')
   responsavel!: string;
-  // Campo para contato do responsável
+
   @ApiProperty({
-    description: 'Contato do responsável',
+    description: 'Telefone do responsável',
     example: '(47) 99999-0000',
+    maxLength: LIMITES.TELEFONE,
   })
-  @IsString()
-  @IsNotEmpty()
+  @CampoTelefone('Contato')
   contato!: string;
 }

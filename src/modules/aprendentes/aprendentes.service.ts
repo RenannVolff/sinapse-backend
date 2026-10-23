@@ -1,9 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
+import { UpdateAprendenteDto } from './dto/update-aprendente.dto';
 import { IaService, SessaoQualitativa } from '../ia/ia.service';
 import { FaseAtendimento } from '@prisma/client';
 import { calcularScoreSessao } from '../../common/utils/calcular-score';
+import {
+  diaParaArmazenar,
+  extrairDia,
+  normalizarPeriodo,
+} from '../../common/utils/datas';
+
+// Data só-dia já validada pelo DTO; gravada ao meio-dia UTC (ver datas.ts)
+function dataDia(valor: string): Date {
+  return diaParaArmazenar(extrairDia(valor) ?? valor);
+}
 
 @Injectable()
 export class AprendentesService {
@@ -16,7 +27,7 @@ export class AprendentesService {
     return this.prisma.aprendente.create({
       data: {
         nomeCompleto: data.nomeCompleto,
-        dataNascimento: new Date(data.dataNascimento),
+        dataNascimento: dataDia(data.dataNascimento),
         responsavel: data.responsavel,
         contato: data.contato,
         usuarioId,
@@ -44,6 +55,28 @@ export class AprendentesService {
 
     if (!aprendente) throw new NotFoundException('Aprendente não encontrado.');
     return aprendente;
+  }
+
+  // Edição parcial: campo omitido mantém o valor atual. A fase tem rota
+  // própria (atualizarFase) e não é alterada aqui.
+  async update(id: string, data: UpdateAprendenteDto, usuarioId: string) {
+    const aprendente = await this.prisma.aprendente.findFirst({
+      where: { id, usuarioId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!aprendente) throw new NotFoundException('Aprendente não encontrado.');
+
+    return this.prisma.aprendente.update({
+      where: { id },
+      data: {
+        nomeCompleto: data.nomeCompleto,
+        dataNascimento: data.dataNascimento
+          ? dataDia(data.dataNascimento)
+          : undefined,
+        responsavel: data.responsavel,
+        contato: data.contato,
+      },
+    });
   }
 
   async atualizarFase(id: string, fase: FaseAtendimento, usuarioId: string) {
@@ -89,9 +122,14 @@ export class AprendentesService {
     dataFimIso: string,
     usuarioId: string,
   ) {
-    const inicio = new Date(dataInicioIso);
-    const fim = new Date(dataFimIso);
-    fim.setHours(23, 59, 59, 999);
+    // Dias no fuso de Brasília; período invertido é trocado, e o período
+    // efetivamente usado volta na resposta para o front avisar o usuário.
+    const periodo = normalizarPeriodo(dataInicioIso, dataFimIso);
+    const periodoUsado = {
+      inicio: periodo.inicio,
+      fim: periodo.fim,
+      invertido: periodo.invertido,
+    };
 
     const sessoes = await this.prisma.atendimento.findMany({
       where: {
@@ -101,8 +139,8 @@ export class AprendentesService {
         // Mesmo critério de Relatórios e Dashboard: só sessões finalizadas.
         concluido: true,
         dataAtendimento: {
-          gte: inicio,
-          lte: fim,
+          gte: periodo.desde,
+          lte: periodo.ate,
         },
       },
       orderBy: { dataAtendimento: 'asc' },
@@ -117,6 +155,7 @@ export class AprendentesService {
         resumoIa:
           'Não há atendimentos concluídos para este paciente no período selecionado.',
         dadosGrafico: [],
+        periodo: periodoUsado,
       };
     }
 
@@ -208,7 +247,7 @@ export class AprendentesService {
       resumoIa = resumoViaIa;
     }
 
-    return { resumoIa, dadosGrafico };
+    return { resumoIa, dadosGrafico, periodo: periodoUsado };
   }
 
   // Histórico completo, sem filtro de data: alimenta os gráficos AB-ABAB,
