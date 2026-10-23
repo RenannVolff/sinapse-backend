@@ -1,24 +1,6 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { PartialType } from '@nestjs/swagger';
+import { CreatePeiTemplateDto } from './create-pei-template.dto';
 
-export class UpdatePeiTemplateDto {
-  @ApiPropertyOptional({ description: 'Nome do molde de PEI' })
-  @IsString()
-  @IsOptional()
-  nome?: string;
-
-  @ApiPropertyOptional({ description: 'Dificuldades padrão do molde' })
-  @IsString()
-  @IsOptional()
-  dificuldades?: string;
-
-  @ApiPropertyOptional({ description: 'Objetivos padrão do molde' })
-  @IsString()
-  @IsOptional()
-  objetivos?: string;
-
-  @ApiPropertyOptional({ description: 'Estratégias padrão do molde' })
-  @IsString()
-  @IsOptional()
-  estrategias?: string;
-}
+// Edição parcial com as mesmas validações e limites da criação (campo
+// enviado não pode ficar vazio).
+export class UpdatePeiTemplateDto extends PartialType(CreatePeiTemplateDto) {}
