@@ -22,6 +22,7 @@ import { CreateAprendenteDto } from './dto/create-aprendente.dto';
 import { UpdateAprendenteDto } from './dto/update-aprendente.dto';
 import { UpdateFaseAprendenteDto } from './dto/update-fase-aprendente.dto';
 import { RelatorioIaQueryDto } from './dto/relatorio-ia-query.dto';
+import { ListarAprendentesQueryDto } from './dto/listar-aprendentes-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
@@ -41,9 +42,17 @@ export class AprendentesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lista todos os aprendentes' })
-  findAll(@CurrentUser() user: AuthenticatedUser) {
-    return this.aprendentesService.findAll(user.id);
+  @ApiOperation({
+    summary: 'Lista todos os aprendentes',
+    description:
+      'Padrão: ordem alfabética crescente pelo nome. `sortBy` aceita name, ' +
+      'guardianName ou contact; `order` aceita asc ou desc.',
+  })
+  findAll(
+    @Query() query: ListarAprendentesQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.aprendentesService.findAll(user.id, query);
   }
 
   @Get(':id')

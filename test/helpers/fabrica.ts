@@ -55,7 +55,12 @@ export const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 export async function criarAprendente(
   ctx: AppTeste,
   terapeuta: Terapeuta,
-  dados: Partial<{ nomeCompleto: string; dataNascimento: string }> = {},
+  dados: Partial<{
+    nomeCompleto: string;
+    dataNascimento: string;
+    responsavel: string;
+    contato: string;
+  }> = {},
 ) {
   const res = await ctx.api
     .post('/aprendentes')
@@ -63,8 +68,8 @@ export async function criarAprendente(
     .send({
       nomeCompleto: dados.nomeCompleto ?? 'Aprendente Teste',
       dataNascimento: dados.dataNascimento ?? '2016-03-10',
-      responsavel: 'Responsável Teste',
-      contato: '(41) 99999-0000',
+      responsavel: dados.responsavel ?? 'Responsável Teste',
+      contato: dados.contato ?? '(41) 99999-0000',
     })
     .expect(201);
   return res.body as { id: string; nomeCompleto: string; faseAtual: string };

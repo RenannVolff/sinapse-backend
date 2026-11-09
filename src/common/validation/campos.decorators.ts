@@ -1,6 +1,7 @@
 import { applyDecorators } from '@nestjs/common';
 import { Transform } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -161,6 +162,21 @@ export function CampoInteiro(
     Max(maximo, { message: mensagemFaixa }),
   );
   return applyDecorators(...decorators);
+}
+
+// Valor fechado (whitelist), ex.: campo de ordenação vindo da query. Qualquer
+// valor fora da lista responde 400.
+export function CampoOpcao(
+  rotulo: string,
+  valores: readonly string[],
+  opcoes: OpcoesCampo = {},
+) {
+  return applyDecorators(
+    ...presenca(rotulo, opcoes),
+    IsIn(valores, {
+      message: `${rotulo}: use um dos valores: ${valores.join(', ')}.`,
+    }),
+  );
 }
 
 // Data "só dia" (AAAA-MM-DD; também aceita ISO completo e usa o dia escrito),

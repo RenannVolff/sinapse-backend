@@ -8,11 +8,13 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PeiTemplateService } from './pei-template.service';
 import { CreatePeiTemplateDto } from './dto/create-pei-template.dto';
 import { UpdatePeiTemplateDto } from './dto/update-pei-template.dto';
+import { ListarPeiTemplatesQueryDto } from './dto/listar-pei-templates-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/decorators/current-user.decorator';
 
@@ -32,9 +34,17 @@ export class PeiTemplateController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Lista os moldes de PEI do terapeuta' })
-  findAll(@CurrentUser() user: AuthenticatedUser) {
-    return this.peiTemplateService.findAll(user.id);
+  @ApiOperation({
+    summary: 'Lista os moldes de PEI do terapeuta',
+    description:
+      'Padrão: ordem alfabética crescente pelo título. `sortBy` aceita ' +
+      'title; `order` aceita asc ou desc. Moldes excluídos não aparecem.',
+  })
+  findAll(
+    @Query() query: ListarPeiTemplatesQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.peiTemplateService.findAll(user.id, query);
   }
 
   @Get(':id')

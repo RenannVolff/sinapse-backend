@@ -3,8 +3,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAprendenteDto } from './dto/create-aprendente.dto';
 import { UpdateAprendenteDto } from './dto/update-aprendente.dto';
 import { IaService, SessaoQualitativa } from '../ia/ia.service';
-import { FaseAtendimento } from '@prisma/client';
+import { Aprendente, FaseAtendimento, Prisma } from '@prisma/client';
 import { calcularScoreSessao } from '../../common/utils/calcular-score';
+import { sqlDirecao, textoOrdenavel } from '../../common/utils/ordenacao';
+import {
+  ListarAprendentesQueryDto,
+  OrdenacaoAprendente,
+} from './dto/listar-aprendentes-query.dto';
 import {
   diaParaArmazenar,
   extrairDia,
@@ -35,11 +40,24 @@ export class AprendentesService {
     });
   }
 
-  findAll(usuarioId: string) {
-    return this.prisma.aprendente.findMany({
-      where: { usuarioId, deletedAt: null },
-      orderBy: { criadoEm: 'desc' },
-    });
+  // Ordenação no banco (ver common/utils/ordenacao.ts). Nome e responsável
+  // usam collation ICU (sem diferenciar maiúsculas e acentos); o contato é
+  // comparado só pelos dígitos, então a máscara não interfere. Responsável ou
+  // contato vazios vão para o fim nas duas direções; o nome do aprendente e
+  // o id desempatam.
+  findAll(usuarioId: string, query: ListarAprendentesQueryDto = {}) {
+    const direcao = sqlDirecao(query.order);
+    const nome = textoOrdenavel('nomeCompleto');
+    const criterio: Record<OrdenacaoAprendente, Prisma.Sql> = {
+      name: Prisma.sql`${nome} ${direcao}`,
+      guardianName: Prisma.sql`NULLIF(TRIM("responsavel"), '') COLLATE "und-x-icu" ${direcao} NULLS LAST`,
+      contact: Prisma.sql`NULLIF(regexp_replace("contato", '[^0-9]', '', 'g'), '') ${direcao} NULLS LAST`,
+    };
+
+    return this.prisma.$queryRaw<Aprendente[]>`
+      SELECT * FROM "aprendentes"
+      WHERE "usuarioId" = ${usuarioId} AND "deletedAt" IS NULL
+      ORDER BY ${criterio[query.sortBy ?? 'name']}, ${nome} ASC, "id" ASC`;
   }
 
   async findOne(id: string, usuarioId: string) {

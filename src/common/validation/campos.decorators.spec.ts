@@ -4,6 +4,8 @@ import { CreateAprendenteDto } from '../../modules/aprendentes/dto/create-aprend
 import { UpdateAprendenteDto } from '../../modules/aprendentes/dto/update-aprendente.dto';
 import { CreateUsuarioDto } from '../../modules/usuarios/dto/create-usuario.dto';
 import { CreatePeiDto } from '../../modules/pei/dto/create-pei.dto';
+import { ListarAprendentesQueryDto } from '../../modules/aprendentes/dto/listar-aprendentes-query.dto';
+import { ListarPeiTemplatesQueryDto } from '../../modules/pei-templates/dto/listar-pei-templates-query.dto';
 import { traduzirErrosPorCampo } from './mensagens-validacao';
 import { sanitizarTexto } from './sanitizar';
 
@@ -209,5 +211,44 @@ describe('CreateUsuarioDto.email', () => {
       field: 'email',
       message: 'E-mail: máximo de 50 caracteres.',
     });
+  });
+});
+
+describe('ListarAprendentesQueryDto / ListarPeiTemplatesQueryDto', () => {
+  it('aceita a query vazia e os valores da whitelist', async () => {
+    expect((await erros(ListarAprendentesQueryDto, {})).erros).toEqual([]);
+    for (const sortBy of ['name', 'guardianName', 'contact']) {
+      for (const order of ['asc', 'desc']) {
+        expect(
+          (await erros(ListarAprendentesQueryDto, { sortBy, order })).erros,
+        ).toEqual([]);
+      }
+    }
+    expect(
+      (await erros(ListarPeiTemplatesQueryDto, { sortBy: 'title' })).erros,
+    ).toEqual([]);
+  });
+
+  it('recusa sortBy e order fora da whitelist com mensagem no padrão', async () => {
+    expect(
+      (
+        await erros(ListarAprendentesQueryDto, {
+          sortBy: 'nomeCompleto',
+          order: 'DESC',
+        })
+      ).erros,
+    ).toEqual([
+      {
+        field: 'sortBy',
+        message:
+          'Ordenar por: use um dos valores: name, guardianName, contact.',
+      },
+      { field: 'order', message: 'Direção: use um dos valores: asc, desc.' },
+    ]);
+    expect(
+      (await erros(ListarPeiTemplatesQueryDto, { sortBy: 'name' })).erros,
+    ).toEqual([
+      { field: 'sortBy', message: 'Ordenar por: use um dos valores: title.' },
+    ]);
   });
 });
