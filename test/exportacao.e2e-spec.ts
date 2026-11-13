@@ -161,6 +161,118 @@ describe('D. Exportação', () => {
     });
   });
 
+  describe('POST /aprendentes/:id/exportar-docx — chartTypes', () => {
+    const DESCRICAO_PADRAO =
+      'Tipos de gráfico: Acompanhamento=line; Média=bar; Regressão=line';
+    const png = gerarPng(40, 20, [37, 99, 235]);
+
+    // Gera o .docx e devolve o que importa: descrição das core properties,
+    // document.xml (precisa abrir) e as imagens embutidas.
+    async function exportar(extra: Record<string, unknown> = {}) {
+      const res = await ctx.api
+        .post(`/aprendentes/${aprendenteId}/exportar-docx`)
+        .set(bearer(t.token))
+        .send({
+          nomeAprendente: 'Júlia Exportação',
+          resumoIa: 'Relatório com tipos de gráfico.',
+          graficos: [
+            {
+              titulo: 'Acompanhamento AB-ABAB',
+              imagemBase64: png.toString('base64'),
+            },
+          ],
+          ...extra,
+        })
+        .buffer(true)
+        .parse(lerBinario)
+        .expect(201);
+
+      expect(res.headers['content-type']).toContain(MIME_DOCX);
+      const docx = await JSZip.loadAsync(res.body as Buffer);
+      const documentXml = await docx.file('word/document.xml')!.async('string');
+      const coreXml = await docx.file('docProps/core.xml')!.async('string');
+      const descricao = /<dc:description>([^<]*)<\/dc:description>/.exec(
+        coreXml,
+      )?.[1];
+      const imagens = await Promise.all(
+        docx.file(/^word\/media\/.+\.png$/).map((f) => f.async('nodebuffer')),
+      );
+      return { documentXml, descricao, imagens };
+    }
+
+    // O "rodapé" do relatório é o aviso de revisão: último parágrafo do corpo.
+    function expectDocumentoIntacto(
+      documentXml: string,
+      imagens: Buffer[],
+    ): void {
+      expect(documentXml).toContain(
+        'Relatório de Acompanhamento — Júlia Exportação',
+      );
+      const paragrafos = documentXml.match(/<w:p\b[\s\S]*?<\/w:p>/g) ?? [];
+      expect(paragrafos.at(-1)).toContain(AVISO_REVISAO_PADRAO);
+      expect(imagens).toHaveLength(1);
+      expect(imagens[0].equals(png)).toBe(true);
+    }
+
+    it('aplica os três tipos válidos e grava os tipos efetivos na descrição do .docx', async () => {
+      const { documentXml, descricao, imagens } = await exportar({
+        chartTypes: { acompanhamento: 'area', media: 'line', regressao: 'bar' },
+      });
+      expect(descricao).toBe(
+        'Tipos de gráfico: Acompanhamento=area; Média=line; Regressão=bar',
+      );
+      expectDocumentoIntacto(documentXml, imagens);
+    });
+
+    it('com só uma chave válida, as demais usam o padrão', async () => {
+      const { documentXml, descricao, imagens } = await exportar({
+        chartTypes: { media: 'area' },
+      });
+      expect(descricao).toBe(
+        'Tipos de gráfico: Acompanhamento=line; Média=area; Regressão=line',
+      );
+      expectDocumentoIntacto(documentXml, imagens);
+    });
+
+    it('descarta chaves e valores inválidos sem 400, mantendo os válidos', async () => {
+      const { documentXml, descricao, imagens } = await exportar({
+        chartTypes: {
+          acompanhamento: 'pizza',
+          media: 42,
+          regressao: 'area',
+          desconhecida: 'bar',
+        },
+      });
+      expect(descricao).toBe(
+        'Tipos de gráfico: Acompanhamento=line; Média=bar; Regressão=area',
+      );
+      expectDocumentoIntacto(documentXml, imagens);
+    });
+
+    it.each([
+      ['string', 'bar'],
+      ['array', ['line', 'bar']],
+      ['número', 7],
+      ['null', null],
+      ['objeto só com inválidos', { acompanhamento: 'LINE', media: null }],
+    ])(
+      'chartTypes inválido (%s) é tratado como ausente, sem 400',
+      async (_caso, chartTypes) => {
+        const { documentXml, descricao, imagens } = await exportar({
+          chartTypes,
+        });
+        expect(descricao).toBe(DESCRICAO_PADRAO);
+        expectDocumentoIntacto(documentXml, imagens);
+      },
+    );
+
+    it('sem chartTypes, gera o mesmo documento de antes, com os tipos padrão na descrição', async () => {
+      const { documentXml, descricao, imagens } = await exportar();
+      expect(descricao).toBe(DESCRICAO_PADRAO);
+      expectDocumentoIntacto(documentXml, imagens);
+    });
+  });
+
   describe('Limite de 100kb nas demais rotas', () => {
     const corpoAcimaDe100kb = () =>
       JSON.stringify({

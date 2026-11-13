@@ -15,7 +15,12 @@ import {
 } from 'docx';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AVISO_REVISAO_PADRAO } from '../ia/ia.service';
-import { ExportarDocxDto } from './dto/exportar-docx.dto';
+import {
+  ChartTypes,
+  ChaveChartTypes,
+  ExportarDocxDto,
+  TipoGrafico,
+} from './dto/exportar-docx.dto';
 import {
   extrairDia,
   formatarDiaBr,
@@ -25,6 +30,20 @@ import {
 
 const LARGURA_MAXIMA_IMAGEM_PX = 550;
 const PNG_ASSINATURA = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+// Padrão = o que o front desenha hoje nos gráficos exportados (AB-ABAB em
+// linha, média por período em barras, regressão em linha).
+const TIPOS_GRAFICO_PADRAO: Record<ChaveChartTypes, TipoGrafico> = {
+  acompanhamento: 'line',
+  media: 'bar',
+  regressao: 'line',
+};
+
+const ROTULOS_GRAFICO: Record<ChaveChartTypes, string> = {
+  acompanhamento: 'Acompanhamento',
+  media: 'Média',
+  regressao: 'Regressão',
+};
 
 interface DocxGerado {
   buffer: Buffer;
@@ -49,8 +68,10 @@ export class ExportacaoService {
     }
 
     const periodo = this.formatarPeriodo(dto.periodoInicio, dto.periodoFim);
+    const tiposGrafico = this.resolverTiposGrafico(dto.chartTypes);
 
     const documento = new Document({
+      description: this.descreverTiposGrafico(tiposGrafico),
       sections: [
         {
           children: [
@@ -81,6 +102,22 @@ export class ExportacaoService {
       buffer,
       nomeArquivo: `relatorio-${this.slugificar(dto.nomeAprendente)}.docx`,
     };
+  }
+
+  // O DTO já descartou o que era inválido; aqui só completa com o padrão.
+  private resolverTiposGrafico(
+    chartTypes?: ChartTypes,
+  ): Record<ChaveChartTypes, TipoGrafico> {
+    return { ...TIPOS_GRAFICO_PADRAO, ...chartTypes };
+  }
+
+  private descreverTiposGrafico(
+    tipos: Record<ChaveChartTypes, TipoGrafico>,
+  ): string {
+    const pares = (Object.keys(ROTULOS_GRAFICO) as ChaveChartTypes[]).map(
+      (chave) => `${ROTULOS_GRAFICO[chave]}=${tipos[chave]}`,
+    );
+    return `Tipos de gráfico: ${pares.join('; ')}`;
   }
 
   // Sem data informada, usa hoje no fuso de Brasília: o servidor roda em

@@ -1,10 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
   IsBase64,
   IsNotEmpty,
+  IsOptional,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
@@ -13,6 +14,51 @@ import {
   CampoTexto,
 } from '../../../common/validation/campos.decorators';
 import { LIMITES } from '../../../common/validation/limits.constants';
+
+export const TIPOS_GRAFICO = ['line', 'bar', 'area'] as const;
+export type TipoGrafico = (typeof TIPOS_GRAFICO)[number];
+
+export const CHAVES_CHART_TYPES = [
+  'acompanhamento',
+  'media',
+  'regressao',
+] as const;
+export type ChaveChartTypes = (typeof CHAVES_CHART_TYPES)[number];
+
+export type ChartTypes = Partial<Record<ChaveChartTypes, TipoGrafico>>;
+
+// Filtra em vez de validar: chave desconhecida ou valor fora do enum é
+// descartado (sem 400) e o service cai no padrão daquele gráfico. Algo que
+// não seja um objeto simples vira ausente.
+export function normalizarChartTypes(valor: unknown): ChartTypes | undefined {
+  if (typeof valor !== 'object' || valor === null || Array.isArray(valor)) {
+    return undefined;
+  }
+  const entrada = valor as Record<string, unknown>;
+  const resultado: ChartTypes = {};
+  for (const chave of CHAVES_CHART_TYPES) {
+    const tipo = Object.hasOwn(entrada, chave) ? entrada[chave] : undefined;
+    if (
+      typeof tipo === 'string' &&
+      (TIPOS_GRAFICO as readonly string[]).includes(tipo)
+    ) {
+      resultado[chave] = tipo as TipoGrafico;
+    }
+  }
+  return resultado;
+}
+
+// Só para documentação no Swagger; a "validação" é o @Transform acima.
+export class ChartTypesDto {
+  @ApiPropertyOptional({ enum: TIPOS_GRAFICO, example: 'line' })
+  acompanhamento?: TipoGrafico;
+
+  @ApiPropertyOptional({ enum: TIPOS_GRAFICO, example: 'bar' })
+  media?: TipoGrafico;
+
+  @ApiPropertyOptional({ enum: TIPOS_GRAFICO, example: 'line' })
+  regressao?: TipoGrafico;
+}
 
 export class GraficoExportacaoDto {
   @ApiProperty({ description: 'Título do gráfico', maxLength: LIMITES.TITULO })
@@ -103,4 +149,14 @@ export class ExportarDocxDto {
     maximo: LIMITES.DATA_MAX,
   })
   periodoFim?: string;
+
+  @ApiPropertyOptional({
+    type: ChartTypesDto,
+    description:
+      "Tipo de cada gráfico ('line' | 'bar' | 'area'). Opcional: chaves desconhecidas e valores inválidos são ignorados (sem erro 400) e o gráfico usa o padrão (acompanhamento=line, media=bar, regressao=line). Os tipos efetivos ficam registrados na descrição das propriedades do .docx.",
+    example: { acompanhamento: 'line', media: 'bar', regressao: 'area' },
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => normalizarChartTypes(value))
+  chartTypes?: ChartTypes;
 }
